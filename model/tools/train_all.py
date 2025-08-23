@@ -46,15 +46,14 @@ def prepare_data_for_phrase(phrase):
     logger.info(f"Preparing data for phrase: {phrase}")
     
     cmd = [
-        'python', 'prepare_data.py',
+        'python', 'model/tools/prepare_data.py',
         '--phrase', phrase,
         '--positive-samples', str(TRAINING_CONFIG['positive_samples']),
         '--negative-samples', str(TRAINING_CONFIG['negative_samples']),
         '--augment',
         '--augment-factor', str(TRAINING_CONFIG['augment_factor'])
     ]
-    
-    return run_command(cmd, cwd='tools')
+    return run_command(cmd)
 
 
 def train_model_for_phrase(phrase):
@@ -62,17 +61,15 @@ def train_model_for_phrase(phrase):
     logger.info(f"Training model for phrase: {phrase}")
     
     output_path = f"../exports/{phrase}.onnx"
-    
     cmd = [
-        'python', 'train.py',
+        'python', 'model/tools/train.py',
         '--phrase', phrase,
         '--output', output_path,
         '--epochs', str(TRAINING_CONFIG['epochs']),
         '--batch-size', str(TRAINING_CONFIG['batch_size']),
         '--learning-rate', str(TRAINING_CONFIG['learning_rate'])
     ]
-    
-    return run_command(cmd, cwd='tools')
+    return run_command(cmd)
 
 
 def evaluate_model_for_phrase(phrase):
@@ -81,16 +78,14 @@ def evaluate_model_for_phrase(phrase):
     
     model_path = f"../exports/{phrase}.onnx"
     test_data_path = f"../data/{phrase}"
-    
     cmd = [
-        'python', 'evaluate.py',
+        'python', 'model/tools/evaluate.py',
         '--model', model_path,
         '--test-data', test_data_path,
         '--phrase', phrase,
         '--fp-test'
     ]
-    
-    return run_command(cmd, cwd='testing')
+    return run_command(cmd)
 
 
 def main():
