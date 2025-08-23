@@ -1,0 +1,15 @@
+{
+  "phrase": "go-ozwell",
+  "variations": [
+    "go ozwell",
+    "go oswell"
+  ],
+  "positive_count": 250,
+  "negative_count": 500,
+  "test_count": 25,
+  "sample_rate": 16000,
+  "duration_range": [
+    0.5,
+    3.0
+  ]
+}

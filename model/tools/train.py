@@ -194,7 +194,7 @@ class WakeWordTrainer:
             total_loss += loss.item()
             num_batches += 1
             
-            if batch_idx % 50 == 0:
+            if batch_idx % 10 == 0:
                 logger.info(f'Batch {batch_idx}/{len(dataloader)}, Loss: {loss.item():.4f}')
         
         return total_loss / num_batches
@@ -233,6 +233,7 @@ class WakeWordTrainer:
         for epoch in range(epochs):
             # Training
             train_loss = self.train_epoch(train_loader)
+            logger.info(f"Epoch {epoch+1}/{epochs} - Training Loss: {train_loss:.4f}")
             
             # Validation
             val_loss, val_accuracy = self.evaluate(val_loader)

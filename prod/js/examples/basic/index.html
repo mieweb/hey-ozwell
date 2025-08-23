@@ -263,16 +263,14 @@
                     
                     this.log('Microphone access granted');
                     
-                    // For demo purposes, we'll skip model loading since we don't have real models yet
                     this.log('Loading wake-word models...');
                     
-                    // Simulate model loading
-                    const models = {
-                        'hey-ozwell': { label: 'hey-ozwell', data: new ArrayBuffer(1000) },
-                        'im-done': { label: 'im-done', data: new ArrayBuffer(1000) },
-                        'go-ozwell': { label: 'go-ozwell', data: new ArrayBuffer(1000) },
-                        'ozwell-go': { label: 'ozwell-go', data: new ArrayBuffer(1000) }
-                    };
+                    const models = await ModelManager.fetchAndCache('/models/v1.0/', {
+                        'hey-ozwell': 'hey-ozwell.onnx',
+                        'im-done': 'im-done.onnx',
+                        'go-ozwell': 'go-ozwell.onnx',
+                        'ozwell-go': 'ozwell-go.onnx'
+                    });
                     
                     this.log('Models loaded successfully');
                     
