@@ -5,9 +5,9 @@
     "hey oswell",
     "hay ozwell"
   ],
-  "positive_count": 250,
-  "negative_count": 500,
-  "test_count": 25,
+  "positive_count": 10,
+  "negative_count": 10,
+  "test_count": 1,
   "sample_rate": 16000,
   "duration_range": [
     0.5,

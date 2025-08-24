@@ -30,6 +30,7 @@ class DataPreparer:
     }
     
     def __init__(self, data_dir: str = '../data', sample_rate: int = 16000):
+        print(">>> Initializing DataPreparer")
         self.data_dir = Path(data_dir)
         self.sample_rate = sample_rate
         
@@ -48,6 +49,8 @@ class DataPreparer:
             positive_count: Number of positive samples to collect
             negative_count: Number of negative samples to collect
         """
+        print(f">>> Collecting samples for: {phrase}")
+        print(f">>> Generating {positive_count} positive and {negative_count} negative samples")
         logger.info(f"Collecting samples for phrase: {phrase}")
         
         if phrase not in self.WAKE_PHRASES:
@@ -102,6 +105,7 @@ class DataPreparer:
         Generate placeholder audio data for demonstration
         In production, this would be replaced with real audio recordings
         """
+        print(f">>> Generating {'positive' if positive else 'negative'} placeholder audio")
         if duration is None:
             duration = random.uniform(0.5, 3.0)
         
@@ -150,6 +154,7 @@ class DataPreparer:
             phrase: Target phrase to augment
             augmentation_factor: How many augmented versions to create per original
         """
+        print(f">>> Augmenting data for phrase: {phrase} with factor {augmentation_factor}")
         logger.info(f"Augmenting data for phrase: {phrase}")
         
         phrase_dir = self.data_dir / phrase
@@ -173,6 +178,7 @@ class DataPreparer:
     
     def _apply_augmentation(self, audio: np.ndarray) -> np.ndarray:
         """Apply random augmentation to audio sample"""
+        print(">>> Applying audio augmentation")
         
         # Speed/pitch variation
         if random.random() < 0.7:
@@ -197,6 +203,7 @@ class DataPreparer:
     
     def create_training_manifest(self, phrase: str):
         """Create training manifest file for the phrase"""
+        print(f">>> Creating training manifest for: {phrase}")
         phrase_dir = self.data_dir / phrase
         
         manifest = {
@@ -281,4 +288,5 @@ def main():
 
 
 if __name__ == '__main__':
+    print("Inside prepare_data.py")
     main()

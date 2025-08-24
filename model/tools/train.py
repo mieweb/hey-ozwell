@@ -194,7 +194,7 @@ class WakeWordTrainer:
             total_loss += loss.item()
             num_batches += 1
             
-            if batch_idx % 10 == 0:
+            if batch_idx % 50 == 0:
                 logger.info(f'Batch {batch_idx}/{len(dataloader)}, Loss: {loss.item():.4f}')
         
         return total_loss / num_batches
@@ -233,7 +233,6 @@ class WakeWordTrainer:
         for epoch in range(epochs):
             # Training
             train_loss = self.train_epoch(train_loader)
-            logger.info(f"Epoch {epoch+1}/{epochs} - Training Loss: {train_loss:.4f}")
             
             # Validation
             val_loss, val_accuracy = self.evaluate(val_loader)
@@ -284,6 +283,7 @@ class WakeWordTrainer:
 
 
 def main():
+    print(">>> Starting main() in train.py")
     parser = argparse.ArgumentParser(description='Train Hey Ozwell wake-word model')
     parser.add_argument('--phrase', required=True, 
                        choices=['hey-ozwell', 'im-done', 'go-ozwell', 'ozwell-go'],
@@ -304,6 +304,7 @@ def main():
                        help='Number of mel frequency bands')
     
     args = parser.parse_args()
+    print(">>> Parsed arguments:", args)
     
     # Set device
     if args.device == 'cuda' and torch.cuda.is_available():
@@ -320,21 +321,26 @@ def main():
     
     if not manifest_file.exists():
         raise FileNotFoundError(f"Training manifest not found: {manifest_file}")
+    print(">>> Found training manifest:", manifest_file)
     
     # Create datasets
+    print(">>> Creating AudioDataset")
     dataset = AudioDataset(manifest_file, args.data_dir, n_mels=args.n_mels)
     
     # Split into train/validation
     train_size = int(0.8 * len(dataset))
     val_size = len(dataset) - train_size
     train_dataset, val_dataset = torch.utils.data.random_split(dataset, [train_size, val_size])
+    print(f">>> Train/Val sizes: {train_size}/{val_size}")
     
     # Create data loaders
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False)
     
     # Create model
+    print(">>> Creating model")
     model = WakeWordModel(n_mels=args.n_mels)
+    print(">>> Model created")
     logger.info(f"Model created with {sum(p.numel() for p in model.parameters())} parameters")
     
     # Create trainer
@@ -342,8 +348,10 @@ def main():
     trainer.setup_optimizer(learning_rate=args.learning_rate)
     
     # Train model
+    print(">>> Beginning training")
     model_save_path = args.output.replace('.onnx', '.pth')
     trainer.train(train_loader, val_loader, epochs=args.epochs, save_path=model_save_path)
+    print(">>> Training complete, exporting to ONNX")
     
     # Load best model
     model.load_state_dict(torch.load(model_save_path, map_location=device))
@@ -353,10 +361,12 @@ def main():
     
     # Final evaluation
     val_loss, val_accuracy = trainer.evaluate(val_loader)
+    print(f">>> Final evaluation complete: Accuracy={val_accuracy:.4f}")
     logger.info(f'Final validation accuracy: {val_accuracy:.4f}')
     
     logger.info("Training complete!")
 
 
 if __name__ == '__main__':
+    print("Inside train.py")
     main()
