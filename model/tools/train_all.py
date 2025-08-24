@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+print("inside train_all.py")
 """
 Batch training script for all Hey Ozwell wake phrases.
 Trains all four wake-word models in sequence.
@@ -30,62 +31,74 @@ TRAINING_CONFIG = {
 
 def run_command(cmd, cwd=None):
     """Run a shell command and return success status"""
+    print(f">>> Running command: {' '.join(cmd)} in cwd={cwd}")
     try:
         logger.info(f"Running: {' '.join(cmd)}")
         result = subprocess.run(cmd, cwd=cwd, check=True, capture_output=True, text=True)
         logger.info("Command completed successfully")
+        print(">>> Command succeeded")
         return True
     except subprocess.CalledProcessError as e:
         logger.error(f"Command failed: {e}")
         logger.error(f"Error output: {e.stderr}")
+        print(f">>> Command failed: {e}")
+        print(f">>> Error output: {e.stderr}")
         return False
 
 
 def prepare_data_for_phrase(phrase):
     """Prepare training data for a specific phrase"""
+    print(">>> In prepare_data_for_phrase()")
     logger.info(f"Preparing data for phrase: {phrase}")
     
     cmd = [
-        'python', 'model/tools/prepare_data.py',
+        'python', 'prepare_data.py',
         '--phrase', phrase,
         '--positive-samples', str(TRAINING_CONFIG['positive_samples']),
         '--negative-samples', str(TRAINING_CONFIG['negative_samples']),
         '--augment',
         '--augment-factor', str(TRAINING_CONFIG['augment_factor'])
     ]
-    return run_command(cmd)
+    
+    return run_command(cmd, cwd='tools')
 
 
 def train_model_for_phrase(phrase):
     """Train model for a specific phrase"""
+    print(">>> In train_model_for_phrase()")
     logger.info(f"Training model for phrase: {phrase}")
     
     output_path = f"../exports/{phrase}.onnx"
+    
     cmd = [
-        'python', 'model/tools/train.py',
+        'python', 'train.py',
         '--phrase', phrase,
         '--output', output_path,
         '--epochs', str(TRAINING_CONFIG['epochs']),
         '--batch-size', str(TRAINING_CONFIG['batch_size']),
         '--learning-rate', str(TRAINING_CONFIG['learning_rate'])
     ]
-    return run_command(cmd)
+    
+    return run_command(cmd, cwd='tools')
 
 
 def evaluate_model_for_phrase(phrase):
     """Evaluate trained model for a specific phrase"""
+    print(">>> In evaluate_model_for_phrase()")
     logger.info(f"Evaluating model for phrase: {phrase}")
     
     model_path = f"../exports/{phrase}.onnx"
     test_data_path = f"../data/{phrase}"
+    
     cmd = [
-        'python', 'model/tools/evaluate.py',
+        'python', 'evaluate.py',
         '--model', model_path,
         '--test-data', test_data_path,
         '--phrase', phrase,
         '--fp-test'
     ]
-    return run_command(cmd)
+    
+    return run_command(cmd, cwd='testing')
 
 
 def main():
@@ -111,6 +124,7 @@ def main():
         # Step 1: Prepare data
         success = prepare_data_for_phrase(phrase)
         results['data_preparation'][phrase] = success
+        print(f"Completed data prep for: {phrase}")
         
         if not success:
             logger.error(f"Data preparation failed for {phrase}, skipping training")
@@ -119,6 +133,7 @@ def main():
         # Step 2: Train model
         success = train_model_for_phrase(phrase)
         results['training'][phrase] = success
+        print(f"Completed training for: {phrase}")
         
         if not success:
             logger.error(f"Training failed for {phrase}, skipping evaluation")
@@ -127,6 +142,7 @@ def main():
         # Step 3: Evaluate model
         success = evaluate_model_for_phrase(phrase)
         results['evaluation'][phrase] = success
+        print(f"Completed evaluation for: {phrase}")
         
         if not success:
             logger.warning(f"Evaluation failed for {phrase}")
@@ -156,4 +172,5 @@ def main():
 
 
 if __name__ == '__main__':
+    print("inside train_all.py")
     main()
