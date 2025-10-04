@@ -1,0 +1,37 @@
+{
+  "name": "@mieweb/hey-ozwell",
+  "version": "1.0.0",
+  "description": "Browser-based wake-word detection SDK for 'Hey Ozwell' phrases",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "echo 'Build step - currently using ES modules directly'",
+    "test": "echo 'Tests not yet implemented'",
+    "lint": "echo 'Linting not yet configured'",
+    "dev": "python -m http.server 8000"
+  },
+  "keywords": [
+    "wake-word",
+    "speech-recognition", 
+    "onnx",
+    "browser",
+    "audio",
+    "ozwell"
+  ],
+  "author": "MIE",
+  "license": "MIT",
+  "dependencies": {
+    "onnxruntime-web": "^1.16.0",
+    "idb-keyval": "^6.2.1"
+  },
+  "devDependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mieweb/hey-ozwell.git"
+  },
+  "files": [
+    "src/",
+    "examples/",
+    "README.md"
+  ]
+}

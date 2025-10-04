@@ -1,0 +1,5 @@
+# Model files for browser deployment
+*.onnx
+
+# This directory contains ONNX models optimized for browser inference
+# Copy models here from ../../../model/exports/ after training

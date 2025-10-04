@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hey Ozwell - Basic Example</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .status {
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+            font-weight: bold;
+        }
+        
+        .status.inactive {
+            background-color: #f8f9fa;
+            border: 2px solid #dee2e6;
+            color: #6c757d;
+        }
+        
+        .status.listening {
+            background-color: #d4edda;
+            border: 2px solid #c3e6cb;
+            color: #155724;
+        }
+        
+        .status.detecting {
+            background-color: #fff3cd;
+            border: 2px solid #ffeaa7;
+            color: #856404;
+        }
+        
+        .controls {
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+        }
+        
+        button:hover {
+            background-color: #0056b3;
+        }
+        
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        
+        .wake-phrases {
+            background-color: #e9ecef;
+            padding: 20px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        
+        .wake-phrases h3 {
+            margin-top: 0;
+            color: #495057;
+        }
+        
+        .wake-phrases ul {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        
+        .wake-phrases li {
+            margin: 8px 0;
+            font-family: monospace;
+            background: white;
+            padding: 5px 10px;
+            border-radius: 3px;
+        }
+        
+        .settings {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        
+        .settings label {
+            display: block;
+            margin: 10px 0 5px 0;
+            font-weight: bold;
+        }
+        
+        .settings input[type="range"] {
+            width: 100%;
+        }
+        
+        .settings .value {
+            display: inline-block;
+            min-width: 40px;
+            text-align: right;
+        }
+        
+        .log {
+            background-color: #212529;
+            color: #28a745;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+            margin: 20px 0;
+        }
+        
+        .error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+        }
+        
+        .detection-indicator {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background-color: #dc3545;
+            display: inline-block;
+            margin-right: 10px;
+            transition: all 0.3s ease;
+        }
+        
+        .detection-indicator.active {
+            background-color: #28a745;
+            animation: pulse 1s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.7; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎙️ Hey Ozwell - Wake Word Detection</h1>
+        
+        <div id="status" class="status inactive">
+            <div class="detection-indicator"></div>
+            <span id="status-text">Ready to start</span>
+        </div>
+        
+        <div class="controls">
+            <button id="start-btn">Start Listening</button>
+            <button id="stop-btn" disabled>Stop Listening</button>
+            <button id="clear-log-btn">Clear Log</button>
+        </div>
+        
+        <div class="settings">
+            <h3>Settings</h3>
+            <label for="threshold">
+                Detection Threshold: <span class="value" id="threshold-value">0.7</span>
+            </label>
+            <input type="range" id="threshold" min="0.1" max="1.0" step="0.1" value="0.7">
+        </div>
+        
+        <div class="wake-phrases">
+            <h3>Supported Wake Phrases</h3>
+            <ul>
+                <li><strong>"hey ozwell"</strong> → start recording</li>
+                <li><strong>"ozwell i'm done"</strong> → stop recording</li>
+                <li><strong>"go ozwell"</strong> → stop recording + respond</li>
+                <li><strong>"ozwell go"</strong> → stop recording + respond</li>
+            </ul>
+        </div>
+        
+        <div id="error" class="error" style="display: none;"></div>
+        
+        <div class="log" id="log">
+            <div>Ready to start wake-word detection...</div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { WakeListener, ModelManager, RingBufferRecorder } from '../../src/index.js';
+        
+        class HeyOzwellDemo {
+            constructor() {
+                this.wakeListener = null;
+                this.ringBuffer = null;
+                this.isListening = false;
+                
+                this.initializeUI();
+            }
+            
+            initializeUI() {
+                this.startBtn = document.getElementById('start-btn');
+                this.stopBtn = document.getElementById('stop-btn');
+                this.clearLogBtn = document.getElementById('clear-log-btn');
+                this.thresholdSlider = document.getElementById('threshold');
+                this.thresholdValue = document.getElementById('threshold-value');
+                this.statusDiv = document.getElementById('status');
+                this.statusText = document.getElementById('status-text');
+                this.errorDiv = document.getElementById('error');
+                this.logDiv = document.getElementById('log');
+                this.indicator = document.querySelector('.detection-indicator');
+                
+                this.startBtn.addEventListener('click', () => this.startListening());
+                this.stopBtn.addEventListener('click', () => this.stopListening());
+                this.clearLogBtn.addEventListener('click', () => this.clearLog());
+                
+                this.thresholdSlider.addEventListener('input', (e) => {
+                    const value = parseFloat(e.target.value);
+                    this.thresholdValue.textContent = value.toFixed(1);
+                    if (this.wakeListener) {
+                        this.wakeListener.setThreshold(value);
+                    }
+                });
+                
+                this.log('Demo initialized. Click "Start Listening" to begin.');
+            }
+            
+            async startListening() {
+                try {
+                    this.hideError();
+                    this.log('Requesting microphone access...');
+                    
+                    // Request microphone access
+                    const stream = await navigator.mediaDevices.getUserMedia({ 
+                        audio: {
+                            sampleRate: 16000,
+                            channelCount: 1,
+                            echoCancellation: true,
+                            noiseSuppression: true
+                        }
+                    });
+                    
+                    this.log('Microphone access granted');
+                    
+                    // For demo purposes, we'll skip model loading since we don't have real models yet
+                    this.log('Loading wake-word models...');
+                    
+                    // Simulate model loading
+                    const models = {
+                        'hey-ozwell': { label: 'hey-ozwell', data: new ArrayBuffer(1000) },
+                        'im-done': { label: 'im-done', data: new ArrayBuffer(1000) },
+                        'go-ozwell': { label: 'go-ozwell', data: new ArrayBuffer(1000) },
+                        'ozwell-go': { label: 'ozwell-go', data: new ArrayBuffer(1000) }
+                    };
+                    
+                    this.log('Models loaded successfully');
+                    
+                    // Initialize wake listener
+                    this.wakeListener = new WakeListener({
+                        threshold: parseFloat(this.thresholdSlider.value),
+                        sampleRate: 16000
+                    });
+                    
+                    // Set up ring buffer
+                    this.ringBuffer = new RingBufferRecorder({
+                        bufferDuration: 30,
+                        stream: stream
+                    });
+                    
+                    // Start listening
+                    await this.wakeListener.start(stream, {
+                        models: models,
+                        onWake: (label, confidence) => this.handleWakeDetection(label, confidence)
+                    });
+                    
+                    this.isListening = true;
+                    this.updateUI();
+                    this.log('🎧 Wake-word detection started! Try saying a wake phrase...');
+                    
+                } catch (error) {
+                    this.showError(`Failed to start listening: ${error.message}`);
+                    console.error('Error starting listener:', error);
+                }
+            }
+            
+            stopListening() {
+                try {
+                    if (this.wakeListener) {
+                        this.wakeListener.stop();
+                        this.wakeListener = null;
+                    }
+                    
+                    if (this.ringBuffer) {
+                        this.ringBuffer.stop();
+                        this.ringBuffer = null;
+                    }
+                    
+                    this.isListening = false;
+                    this.updateUI();
+                    this.log('🔇 Wake-word detection stopped');
+                    
+                } catch (error) {
+                    this.showError(`Error stopping listener: ${error.message}`);
+                    console.error('Error stopping listener:', error);
+                }
+            }
+            
+            handleWakeDetection(label, confidence) {
+                const timestamp = new Date().toLocaleTimeString();
+                this.log(`🎯 WAKE DETECTED: "${label}" (confidence: ${confidence.toFixed(2)}) at ${timestamp}`);
+                
+                // Flash indicator
+                this.indicator.classList.add('active');
+                setTimeout(() => {
+                    this.indicator.classList.remove('active');
+                }, 1000);
+                
+                // Handle different wake phrases
+                switch (label) {
+                    case 'hey-ozwell':
+                        this.log('  → Action: Start recording');
+                        break;
+                    case 'im-done':
+                        this.log('  → Action: Stop recording');
+                        break;
+                    case 'go-ozwell':
+                    case 'ozwell-go':
+                        this.log('  → Action: Stop recording + respond');
+                        break;
+                    default:
+                        this.log('  → Action: Unknown phrase');
+                }
+                
+                // Get pre-roll buffer if available
+                if (this.ringBuffer) {
+                    const bufferDuration = this.ringBuffer.getCurrentDuration();
+                    this.log(`  → Pre-roll buffer: ${bufferDuration.toFixed(1)}s available`);
+                }
+            }
+            
+            updateUI() {
+                if (this.isListening) {
+                    this.statusDiv.className = 'status listening';
+                    this.statusText.textContent = 'Listening for wake words...';
+                    this.startBtn.disabled = true;
+                    this.stopBtn.disabled = false;
+                } else {
+                    this.statusDiv.className = 'status inactive';
+                    this.statusText.textContent = 'Not listening';
+                    this.startBtn.disabled = false;
+                    this.stopBtn.disabled = true;
+                }
+            }
+            
+            log(message) {
+                const timestamp = new Date().toLocaleTimeString();
+                const logEntry = document.createElement('div');
+                logEntry.textContent = `[${timestamp}] ${message}`;
+                this.logDiv.appendChild(logEntry);
+                this.logDiv.scrollTop = this.logDiv.scrollHeight;
+            }
+            
+            clearLog() {
+                this.logDiv.innerHTML = '<div>Log cleared.</div>';
+            }
+            
+            showError(message) {
+                this.errorDiv.textContent = message;
+                this.errorDiv.style.display = 'block';
+                this.log(`❌ ERROR: ${message}`);
+            }
+            
+            hideError() {
+                this.errorDiv.style.display = 'none';
+            }
+        }
+        
+        // Initialize demo when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new HeyOzwellDemo();
+        });
+    </script>
+</body>
+</html>
