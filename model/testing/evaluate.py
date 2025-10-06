@@ -11,6 +11,8 @@ import time
 import logging
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+
 
 import numpy as np
 import onnxruntime as ort
@@ -36,7 +38,13 @@ class ModelEvaluator:
         self.max_samples = int(self.max_duration * sample_rate)
         
         # Load ONNX model
-        self.session = ort.InferenceSession(model_path)
+        # Configure ONNX Runtime to avoid threading issues
+        providers = ['CPUExecutionProvider']
+        sess_options = ort.SessionOptions()
+        sess_options.inter_op_num_threads = 1
+        sess_options.intra_op_num_threads = 1
+        
+        self.session = ort.InferenceSession(model_path, sess_options, providers=providers)
         self.input_name = self.session.get_inputs()[0].name
         self.output_name = self.session.get_outputs()[0].name
         
@@ -68,8 +76,8 @@ class ModelEvaluator:
         # Normalize
         log_mel = (log_mel - log_mel.mean()) / (log_mel.std() + 1e-8)
         
-        # Add batch dimension
-        return log_mel.reshape(1, *log_mel.shape).astype(np.float32)
+        # Add batch and channel dimensions for ONNX model (batch_size, channels, height, width)
+        return log_mel.reshape(1, 1, *log_mel.shape).astype(np.float32)
     
     def predict(self, features: np.ndarray, return_confidence: bool = True) -> Tuple[int, float]:
         """Run inference on preprocessed features"""
@@ -90,76 +98,144 @@ class ModelEvaluator:
         else:
             return prediction, inference_time
     
+    # def evaluate_test_set(self, test_dir: str, phrase: str) -> Dict:
+    #     """Evaluate model on test dataset"""
+    #     logger.info(f"Evaluating model on test set: {test_dir}")
+        
+    #     test_path = Path(test_dir)
+        
+    #     predictions = []
+    #     confidences = []
+    #     true_labels = []
+    #     inference_times = []
+        
+    #     # Test positive samples
+    #     positive_dir = test_path / 'test'
+    #     if positive_dir.exists():
+    #         for audio_file in positive_dir.glob('*.wav'):
+    #             features = self.preprocess_audio(str(audio_file))
+    #             pred, conf, inf_time = self.predict(features)
+                
+    #             predictions.append(pred)
+    #             confidences.append(conf)
+    #             true_labels.append(1)  # Positive sample
+    #             inference_times.append(inf_time)
+        
+    #     # Test negative samples (use a subset)
+    #     negative_dir = test_path / '../negative'
+    #     if negative_dir.exists():
+    #         negative_files = list(negative_dir.glob('*.wav'))[:100]  # Limit to 100 for speed
+            
+    #         for audio_file in negative_files:
+    #             features = self.preprocess_audio(str(audio_file))
+    #             pred, conf, inf_time = self.predict(features)
+                
+    #             predictions.append(pred)
+    #             confidences.append(conf)
+    #             true_labels.append(0)  # Negative sample
+    #             inference_times.append(inf_time)
+        
+    #     # Calculate metrics
+    #     accuracy = accuracy_score(true_labels, predictions)
+    #     precision, recall, f1, support = precision_recall_fscore_support(
+    #         true_labels, predictions, average='binary'
+    #     )
+        
+    #     # Confusion matrix
+    #     cm = confusion_matrix(true_labels, predictions, labels=[0, 1])
+        
+    #     # False positive rate (important for wake-word detection)
+    #     if cm.shape == (2, 2):
+    #         tn, fp, fn, tp = cm.ravel()
+    #     else:
+    #         # Handle case where only one class is predicted
+    #         if len(set(predictions)) == 1:
+    #             if predictions[0] == 0:  # All predicted as negative
+    #                 tn = len([p for p, t in zip(predictions, true_labels) if p == 0 and t == 0])
+    #                 fp = 0
+    #                 fn = len([p for p, t in zip(predictions, true_labels) if p == 0 and t == 1])
+    #                 tp = 0
+    #             else:  # All predicted as positive
+    #                 tn = 0
+    #                 fp = len([p for p, t in zip(predictions, true_labels) if p == 1 and t == 0])
+    #                 fn = 0
+    #                 tp = len([p for p, t in zip(predictions, true_labels) if p == 1 and t == 1])
+    #         else:
+    #             tn, fp, fn, tp = 0, 0, 0, 0
+        
+    #     fpr = fp / (fp + tn) if (fp + tn) > 0 else 0
+        
+    #     # Average inference time
+    #     avg_inference_time = np.mean(inference_times) * 1000  # Convert to ms
+        
+    #     results = {
+    #         'phrase': phrase,
+    #         'accuracy': accuracy,
+    #         'precision': precision,
+    #         'recall': recall,
+    #         'f1_score': f1,
+    #         'false_positive_rate': fpr,
+    #         'true_positives': int(tp),
+    #         'true_negatives': int(tn),
+    #         'false_positives': int(fp),
+    #         'false_negatives': int(fn),
+    #         'avg_inference_time_ms': avg_inference_time,
+    #         'total_samples': len(predictions),
+    #         'confusion_matrix': cm.tolist()
+    #     }
+        
+    #     return results
     def evaluate_test_set(self, test_dir: str, phrase: str) -> Dict:
-        """Evaluate model on test dataset"""
+        """Evaluate model on positive-only test dataset."""
         logger.info(f"Evaluating model on test set: {test_dir}")
         
         test_path = Path(test_dir)
-        
         predictions = []
         confidences = []
-        true_labels = []
         inference_times = []
         
-        # Test positive samples
-        positive_dir = test_path / 'test'
-        if positive_dir.exists():
-            for audio_file in positive_dir.glob('*.wav'):
-                features = self.preprocess_audio(str(audio_file))
-                pred, conf, inf_time = self.predict(features)
-                
-                predictions.append(pred)
-                confidences.append(conf)
-                true_labels.append(1)  # Positive sample
-                inference_times.append(inf_time)
-        
-        # Test negative samples (use a subset)
-        negative_dir = test_path.parent / 'negative'
-        if negative_dir.exists():
-            negative_files = list(negative_dir.glob('*.wav'))[:100]  # Limit to 100 for speed
+        # Loop through all .wav test samples
+        for audio_file in test_path.rglob('*.wav'):
+            features = self.preprocess_audio(str(audio_file))
+            pred, conf, inf_time = self.predict(features)
             
-            for audio_file in negative_files:
-                features = self.preprocess_audio(str(audio_file))
-                pred, conf, inf_time = self.predict(features)
-                
-                predictions.append(pred)
-                confidences.append(conf)
-                true_labels.append(0)  # Negative sample
-                inference_times.append(inf_time)
+            predictions.append(pred)
+            confidences.append(conf)
+            inference_times.append(inf_time)
         
-        # Calculate metrics
+        # All are positive samples
+        true_labels = [1] * len(predictions)
+        
+        # Compute metrics
         accuracy = accuracy_score(true_labels, predictions)
-        precision, recall, f1, support = precision_recall_fscore_support(
-            true_labels, predictions, average='binary'
-        )
+        recall = recall_score(true_labels, predictions, zero_division=0)
+        precision = precision_score(true_labels, predictions, zero_division=0)
+        f1 = f1_score(true_labels, predictions, zero_division=0)
         
-        # Confusion matrix
-        cm = confusion_matrix(true_labels, predictions)
-        
-        # False positive rate (important for wake-word detection)
-        tn, fp, fn, tp = cm.ravel()
-        fpr = fp / (fp + tn) if (fp + tn) > 0 else 0
-        
-        # Average inference time
-        avg_inference_time = np.mean(inference_times) * 1000  # Convert to ms
+        avg_confidence = np.mean(confidences)
+        avg_inference_time = np.mean(inference_times) * 1000  # ms
+        total_samples = len(predictions)
+        incorrect = sum([1 for t, p in zip(true_labels, predictions) if t != p])
+
+        tn, fp, fn, tp = confusion_matrix(true_labels, predictions, labels=[0,1]).ravel()
+        false_positive_rate = fp / (fp + tn) if (fp + tn) > 0 else 0.0
         
         results = {
             'phrase': phrase,
+            'total_samples': total_samples,
             'accuracy': accuracy,
             'precision': precision,
             'recall': recall,
             'f1_score': f1,
-            'false_positive_rate': fpr,
-            'true_positives': int(tp),
-            'true_negatives': int(tn),
-            'false_positives': int(fp),
-            'false_negatives': int(fn),
+            'avg_confidence': avg_confidence,
             'avg_inference_time_ms': avg_inference_time,
-            'total_samples': len(predictions),
-            'confusion_matrix': cm.tolist()
+            'incorrect_predictions': incorrect,
+              'false_positive_rate': false_positive_rate
         }
         
+        logger.info(f"Results: {results}")
         return results
+
     
     def test_false_positive_rate(self, negative_audio_dir: str, duration_hours: float = 1.0) -> float:
         """Test false positive rate over extended audio"""

@@ -46,7 +46,7 @@ def prepare_data_for_phrase(phrase):
     logger.info(f"Preparing data for phrase: {phrase}")
     
     cmd = [
-        'python', 'prepare_data.py',
+        'python3', 'prepare_data.py',
         '--phrase', phrase,
         '--positive-samples', str(TRAINING_CONFIG['positive_samples']),
         '--negative-samples', str(TRAINING_CONFIG['negative_samples']),
@@ -64,7 +64,7 @@ def train_model_for_phrase(phrase):
     output_path = f"../exports/{phrase}.onnx"
     
     cmd = [
-        'python', 'train.py',
+        'python3', 'train.py',
         '--phrase', phrase,
         '--output', output_path,
         '--epochs', str(TRAINING_CONFIG['epochs']),
@@ -83,7 +83,7 @@ def evaluate_model_for_phrase(phrase):
     test_data_path = f"../data/{phrase}"
     
     cmd = [
-        'python', 'evaluate.py',
+        'python3', 'evaluate.py',
         '--model', model_path,
         '--test-data', test_data_path,
         '--phrase', phrase,
