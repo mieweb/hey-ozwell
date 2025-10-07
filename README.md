@@ -13,7 +13,7 @@ Use of the Ozwell name in this project is solely for identification of the inten
 * **“go ozwell”** → stop recording & respond
 * **“ozwell go”** → stop recording & respond
 
-Runs fully client-side with **ONNX Runtime Web**, built on top of the excellent **[Hey Buddy!](https://huggingface.co/spaces/bennyboy/hb)** wake-word framework, and designed for **low-latency, privacy-friendly** operation in browsers and on-device platforms.
+Runs fully client-side with **ONNX Runtime Web**, built on top of the excellent **[Hey Buddy!](https://github.com/painebenjamin/hey-buddy)** ([live demo](https://huggingface.co/spaces/benjamin-paine/hey-buddy)) wake-word framework, and designed for **low-latency, privacy-friendly** operation in browsers and on-device platforms.
 
 ---
 
