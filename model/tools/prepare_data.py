@@ -38,6 +38,8 @@ class DataPreparer:
             phrase_dir = self.data_dir / phrase
             for split in ['positive', 'negative', 'test']:
                 (phrase_dir / split).mkdir(parents=True, exist_ok=True)
+            (phrase_dir / 'test' / 'positive').mkdir(parents=True, exist_ok=True)
+            (phrase_dir / 'test' / 'negative').mkdir(parents=True, exist_ok=True)
     
     def collect_samples(self, phrase: str, positive_count: int = 500, negative_count: int = 2000):
         """
@@ -73,11 +75,16 @@ class DataPreparer:
             sf.write(filename, audio_data, self.sample_rate)
         
         # Split some samples for testing
-        test_count = min(50, positive_count // 10)
+        # test_count = min(50, positive_count // 2)
+        test_count=400
         logger.info(f"Creating {test_count} test samples...")
         for i in range(test_count):
             audio_data = self._generate_placeholder_audio(phrase, positive=True)
-            filename = phrase_dir / 'test' / f'test_{i:04d}.wav'
+            filename = phrase_dir / 'test' / 'positive' / f'test_{i:04d}.wav'
+            sf.write(filename, audio_data, self.sample_rate)
+        for i in range(test_count):
+            audio_data = self._generate_placeholder_audio(phrase, positive=False)
+            filename = phrase_dir / 'test' / 'negative' / f'test_{i:04d}.wav'
             sf.write(filename, audio_data, self.sample_rate)
         
         # Create metadata file
@@ -155,8 +162,9 @@ class DataPreparer:
         phrase_dir = self.data_dir / phrase
         positive_dir = phrase_dir / 'positive'
         
-        # Get list of original files
-        original_files = list(positive_dir.glob('*.wav'))
+        # Get list of original files (exclude already augmented files)
+        all_files = list(positive_dir.glob('*.wav'))
+        original_files = [f for f in all_files if '_aug_' not in f.name]
         
         for original_file in original_files:
             audio, sr = librosa.load(original_file, sr=self.sample_rate)
@@ -282,3 +290,5 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+

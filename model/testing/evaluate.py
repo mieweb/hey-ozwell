@@ -11,7 +11,7 @@ import time
 import logging
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, accuracy_score, mean_squared_error
 
 
 import numpy as np
@@ -47,6 +47,12 @@ class ModelEvaluator:
         self.session = ort.InferenceSession(model_path, sess_options, providers=providers)
         self.input_name = self.session.get_inputs()[0].name
         self.output_name = self.session.get_outputs()[0].name
+        
+        # Debug: Log model input/output info
+        input_shape = self.session.get_inputs()[0].shape
+        output_shape = self.session.get_outputs()[0].shape
+        logger.info(f"Model input shape: {input_shape}")
+        logger.info(f"Model output shape: {output_shape}")
         
         logger.info(f"Loaded ONNX model: {model_path}")
     
@@ -93,153 +99,272 @@ class ModelEvaluator:
         prediction = np.argmax(probabilities)
         confidence = probabilities[prediction]
         
+        
         if return_confidence:
             return prediction, confidence, inference_time
         else:
             return prediction, inference_time
     
-    # def evaluate_test_set(self, test_dir: str, phrase: str) -> Dict:
-    #     """Evaluate model on test dataset"""
-    #     logger.info(f"Evaluating model on test set: {test_dir}")
-        
-    #     test_path = Path(test_dir)
-        
-    #     predictions = []
-    #     confidences = []
-    #     true_labels = []
-    #     inference_times = []
-        
-    #     # Test positive samples
-    #     positive_dir = test_path / 'test'
-    #     if positive_dir.exists():
-    #         for audio_file in positive_dir.glob('*.wav'):
-    #             features = self.preprocess_audio(str(audio_file))
-    #             pred, conf, inf_time = self.predict(features)
-                
-    #             predictions.append(pred)
-    #             confidences.append(conf)
-    #             true_labels.append(1)  # Positive sample
-    #             inference_times.append(inf_time)
-        
-    #     # Test negative samples (use a subset)
-    #     negative_dir = test_path / '../negative'
-    #     if negative_dir.exists():
-    #         negative_files = list(negative_dir.glob('*.wav'))[:100]  # Limit to 100 for speed
-            
-    #         for audio_file in negative_files:
-    #             features = self.preprocess_audio(str(audio_file))
-    #             pred, conf, inf_time = self.predict(features)
-                
-    #             predictions.append(pred)
-    #             confidences.append(conf)
-    #             true_labels.append(0)  # Negative sample
-    #             inference_times.append(inf_time)
-        
-    #     # Calculate metrics
-    #     accuracy = accuracy_score(true_labels, predictions)
-    #     precision, recall, f1, support = precision_recall_fscore_support(
-    #         true_labels, predictions, average='binary'
-    #     )
-        
-    #     # Confusion matrix
-    #     cm = confusion_matrix(true_labels, predictions, labels=[0, 1])
-        
-    #     # False positive rate (important for wake-word detection)
-    #     if cm.shape == (2, 2):
-    #         tn, fp, fn, tp = cm.ravel()
-    #     else:
-    #         # Handle case where only one class is predicted
-    #         if len(set(predictions)) == 1:
-    #             if predictions[0] == 0:  # All predicted as negative
-    #                 tn = len([p for p, t in zip(predictions, true_labels) if p == 0 and t == 0])
-    #                 fp = 0
-    #                 fn = len([p for p, t in zip(predictions, true_labels) if p == 0 and t == 1])
-    #                 tp = 0
-    #             else:  # All predicted as positive
-    #                 tn = 0
-    #                 fp = len([p for p, t in zip(predictions, true_labels) if p == 1 and t == 0])
-    #                 fn = 0
-    #                 tp = len([p for p, t in zip(predictions, true_labels) if p == 1 and t == 1])
-    #         else:
-    #             tn, fp, fn, tp = 0, 0, 0, 0
-        
-    #     fpr = fp / (fp + tn) if (fp + tn) > 0 else 0
-        
-    #     # Average inference time
-    #     avg_inference_time = np.mean(inference_times) * 1000  # Convert to ms
-        
-    #     results = {
-    #         'phrase': phrase,
-    #         'accuracy': accuracy,
-    #         'precision': precision,
-    #         'recall': recall,
-    #         'f1_score': f1,
-    #         'false_positive_rate': fpr,
-    #         'true_positives': int(tp),
-    #         'true_negatives': int(tn),
-    #         'false_positives': int(fp),
-    #         'false_negatives': int(fn),
-    #         'avg_inference_time_ms': avg_inference_time,
-    #         'total_samples': len(predictions),
-    #         'confusion_matrix': cm.tolist()
-    #     }
-        
-    #     return results
     def evaluate_test_set(self, test_dir: str, phrase: str) -> Dict:
-        """Evaluate model on positive-only test dataset."""
+        """Evaluate model on test dataset"""
         logger.info(f"Evaluating model on test set: {test_dir}")
         
         test_path = Path(test_dir)
+        
         predictions = []
         confidences = []
+        true_labels = []
         inference_times = []
         
-        # Loop through all .wav test samples
-        for audio_file in test_path.rglob('*.wav'):
-            features = self.preprocess_audio(str(audio_file))
-            pred, conf, inf_time = self.predict(features)
+        # Test positive samples
+        positive_dir = test_path / 'test/positive'
+        if positive_dir.exists():
+            positive_files = list(positive_dir.glob('*.wav'))
+            logger.info(test_path)
+            logger.info(f"Found {len(positive_files)} positive test samples")
+            for audio_file in positive_files:
+                try:
+                    features = self.preprocess_audio(str(audio_file))
+                    pred, conf, inf_time = self.predict(features)
+                    
+                    predictions.append(pred)
+                    confidences.append(conf)
+                    true_labels.append(1)  # Positive sample
+                    inference_times.append(inf_time)
+                except Exception as e:
+                    logger.warning(f"Error processing {audio_file}: {e}")
+        else:
+            logger.warning(f"Positive directory not found: {positive_dir}")
+        
+        # Test negative samples (use a subset)
+        negative_dir = test_path / 'test/negative'
+        if negative_dir.exists():
+            negative_files = list(negative_dir.glob('*.wav')) # Limit to 100 for speed
+            logger.info(f"Found {len(negative_files)} negative test samples")
             
-            predictions.append(pred)
-            confidences.append(conf)
-            inference_times.append(inf_time)
+            for audio_file in negative_files:
+                try:
+                    features = self.preprocess_audio(str(audio_file))
+                    pred, conf, inf_time = self.predict(features)
+                    
+                    predictions.append(pred)
+                    confidences.append(conf)
+                    true_labels.append(0)  # Negative sample
+                    inference_times.append(inf_time)
+                except Exception as e:
+                    logger.warning(f"Error processing {audio_file}: {e}")
+        else:
+            logger.warning(f"Negative directory not found: {negative_dir}")
         
-        # All are positive samples
-        true_labels = [1] * len(predictions)
+        # Check if we have any samples
+        if len(predictions) == 0:
+            logger.error("No test samples found or processed successfully")
+            return {
+                'phrase': phrase,
+                'accuracy': 0.0,
+                'precision': 0.0,
+                'recall': 0.0,
+                'f1_score': 0.0,
+                'false_positive_rate': 0.0,
+                'true_positives': 0,
+                'true_negatives': 0,
+                'false_positives': 0,
+                'false_negatives': 0,
+                'avg_inference_time_ms': 0.0,
+                'total_samples': 0,
+                'confusion_matrix': [[0, 0], [0, 0]]
+            }
         
-        # Compute metrics
+        # Calculate metrics
+        if len(set(true_labels)) < 2:
+            logger.warning("Only one class present in test data, some metrics may be undefined")
+        
+        # Debug: Show all predictions vs true labels
+        logger.info("=== PREDICTION ANALYSIS ===")
+        logger.info(f"Total samples: {len(predictions)}")
+        logger.info(f"Unique true labels: {set(true_labels)}")
+        logger.info(f"Unique predictions: {set(predictions)}")
+        
+        positive_samples = sum(true_labels)
+        negative_samples = len(true_labels) - positive_samples
+        logger.info(f"Positive samples: {positive_samples}")
+        logger.info(f"Negative samples: {negative_samples}")
+        
+        # Show first 10 predictions for debugging
+        for i in range(min(10, len(predictions))):
+            logger.info(f"Sample {i+1}: True={true_labels[i]}, Pred={predictions[i]}, Conf={confidences[i]:.4f}")
+        
+        if len(predictions) > 10:
+            logger.info("... (showing first 10 samples only)")
+            
         accuracy = accuracy_score(true_labels, predictions)
-        recall = recall_score(true_labels, predictions, zero_division=0)
-        precision = precision_score(true_labels, predictions, zero_division=0)
-        f1 = f1_score(true_labels, predictions, zero_division=0)
+        precision, recall, f1, support = precision_recall_fscore_support(
+            true_labels, predictions, average='binary', zero_division=0
+        )
         
-        avg_confidence = np.mean(confidences)
-        avg_inference_time = np.mean(inference_times) * 1000  # ms
-        total_samples = len(predictions)
-        incorrect = sum([1 for t, p in zip(true_labels, predictions) if t != p])
-
-        tn, fp, fn, tp = confusion_matrix(true_labels, predictions, labels=[0,1]).ravel()
-        false_positive_rate = fp / (fp + tn) if (fp + tn) > 0 else 0.0
+        # Confusion matrix
+        cm = confusion_matrix(true_labels, predictions, labels=[0, 1])
+        
+        # False positive rate (important for wake-word detection)
+        if cm.shape == (2, 2):
+            tn, fp, fn, tp = cm.ravel()
+        else:
+            # Handle case where only one class is predicted
+            if len(set(predictions)) == 1:
+                if predictions[0] == 0:  # All predicted as negative
+                    tn = len([p for p, t in zip(predictions, true_labels) if p == 0 and t == 0])
+                    fp = 0
+                    fn = len([p for p, t in zip(predictions, true_labels) if p == 0 and t == 1])
+                    tp = 0
+                else:  # All predicted as positive
+                    tn = 0
+                    fp = len([p for p, t in zip(predictions, true_labels) if p == 1 and t == 0])
+                    fn = 0
+                    tp = len([p for p, t in zip(predictions, true_labels) if p == 1 and t == 1])
+            else:
+                tn, fp, fn, tp = 0, 0, 0, 0
+        
+        fpr = fp / (fp + tn) if (fp + tn) > 0 else 0
+        
+        # Average inference time
+        avg_inference_time = np.mean(inference_times) * 1000 if inference_times else 0.0  # Convert to ms
         
         results = {
             'phrase': phrase,
-            'total_samples': total_samples,
             'accuracy': accuracy,
             'precision': precision,
             'recall': recall,
             'f1_score': f1,
-            'avg_confidence': avg_confidence,
+            'false_positive_rate': fpr,
+            'true_positives': int(tp),
+            'true_negatives': int(tn),
+            'false_positives': int(fp),
+            'false_negatives': int(fn),
             'avg_inference_time_ms': avg_inference_time,
-            'incorrect_predictions': incorrect,
-              'false_positive_rate': false_positive_rate
+            'total_samples': len(predictions),
+            'confusion_matrix': cm.tolist()
         }
         
-        logger.info(f"Results: {results}")
         return results
+
+    # def evaluate_test_set(self, test_dir: str, phrase: str) -> Dict:
+    #     """Evaluate model on positive-only test dataset."""
+    #     logger.info(f"Evaluating model on test set: {test_dir}")
+        
+    #     test_path = Path(test_dir)
+    #     predictions = []
+    #     confidences = []
+    #     inference_times = []
+        
+    #     # Loop through all .wav test samples
+    #     for audio_file in test_path.rglob('*.wav'):
+    #         features = self.preprocess_audio(str(audio_file))
+    #         pred, conf, inf_time = self.predict(features)
+            
+    #         predictions.append(pred)
+    #         confidences.append(conf)
+    #         inference_times.append(inf_time)
+        
+    #     # All are positive samples
+    #     true_labels = [1] * len(predictions)
+        
+    #     # Compute metrics
+    #     accuracy = accuracy_score(true_labels, predictions)
+    #     recall = recall_score(true_labels, predictions, zero_division=0)
+    #     precision = precision_score(true_labels, predictions, zero_division=0)
+    #     f1 = f1_score(true_labels, predictions, zero_division=0)
+        
+    #     avg_confidence = np.mean(confidences)
+    #     avg_inference_time = np.mean(inference_times) * 1000  # ms
+    #     total_samples = len(predictions)
+    #     incorrect = sum([1 for t, p in zip(true_labels, predictions) if t != p])
+
+    #     tn, fp, fn, tp = confusion_matrix(true_labels, predictions, labels=[0,1]).ravel()
+    #     false_positive_rate = fp / (fp + tn) if (fp + tn) > 0 else 0.0
+        
+    #     results = {
+    #         'phrase': phrase,
+    #         'total_samples': total_samples,
+    #         'accuracy': accuracy,
+    #         'precision': precision,
+    #         'recall': recall,
+    #         'f1_score': f1,
+    #         'avg_confidence': avg_confidence,
+    #         'avg_inference_time_ms': avg_inference_time,
+    #         'incorrect_predictions': incorrect,
+    #           'false_positive_rate': false_positive_rate
+    #     }
+        
+    #     logger.info(f"Results: {results}")
+    #     return results
+
+
+    # def evaluate_test_set(self, test_dir: str, phrase: str) -> Dict:
+    #     """Evaluate model using MSE/RMSE metrics (works with continuous confidence scores)."""
+    #     logger.info(f"Evaluating model on test set: {test_dir}")
+        
+    #     test_path = Path(test_dir)
+    #     predictions = []
+    #     confidences = []
+    #     inference_times = []
+    #     true_labels = []
+
+    #     # Loop through all test .wav files
+    #     for audio_file in test_path.rglob('*.wav'):
+    #         features = self.preprocess_audio(str(audio_file))
+    #         pred, conf, inf_time = self.predict(features)
+
+    #         # Store predictions
+    #         predictions.append(pred)
+    #         confidences.append(conf)
+    #         inference_times.append(inf_time)
+            
+    #         # If you don't have separate labels, assume filenames indicate ground truth
+    #         # Example: files containing the phrase name are positive, others are negative
+    #         if phrase.lower() in audio_file.stem.lower():
+    #             true_labels.append(1)
+    #         else:
+    #             true_labels.append(0)
+
+    #     # Handle empty dataset edge case
+    #     if len(predictions) == 0:
+    #         logger.warning("No test samples found.")
+    #         return {'phrase': phrase, 'total_samples': 0}
+
+    #     # Convert to numpy arrays
+    #     predictions = np.array(predictions)
+    #     confidences = np.array(confidences)
+    #     true_labels = np.array(true_labels)
+        
+    #     # Compute basic metrics
+    #     accuracy = accuracy_score(true_labels, predictions)
+        
+    #     # Mean Squared Error and Root Mean Squared Error
+    #     mse = mean_squared_error(true_labels, confidences)
+    #     rmse = np.sqrt(mse)
+        
+    #     avg_confidence = np.mean(confidences)
+    #     avg_inference_time = np.mean(inference_times) * 1000  # ms
+        
+    #     results = {
+    #         'phrase': phrase,
+    #         'total_samples': len(predictions),
+    #         'accuracy': accuracy,
+    #         'mean_squared_error': mse,
+    #         'root_mean_squared_error': rmse,
+    #         'avg_confidence': avg_confidence,
+    #         'avg_inference_time_ms': avg_inference_time
+    #     }
+        
+    #     logger.info(f"Results: {results}")
+    #     return results
+
 
     
     def test_false_positive_rate(self, negative_audio_dir: str, duration_hours: float = 1.0) -> float:
         """Test false positive rate over extended audio"""
         logger.info(f"Testing false positive rate over {duration_hours} hours of audio")
+        logger.info(negative_audio_dir)
         
         negative_path = Path(negative_audio_dir)
         audio_files = list(negative_path.glob('*.wav'))
@@ -388,12 +513,11 @@ def main():
     logger.info(f"  Precision: {results['precision']:.4f}")
     logger.info(f"  Recall: {results['recall']:.4f}")
     logger.info(f"  F1 Score: {results['f1_score']:.4f}")
-    logger.info(f"  False Positive Rate: {results['false_positive_rate']:.4f}")
     logger.info(f"  Avg Inference Time: {results['avg_inference_time_ms']:.2f} ms")
     
     # Run extended false positive test if requested
     if args.fp_test:
-        negative_dir = Path(args.test_data).parent / 'negative'
+        negative_dir = Path(args.test_data).parent / args.phrase/'test/negative'
         fp_rate = evaluator.test_false_positive_rate(str(negative_dir), args.fp_duration)
         results['extended_fp_rate_per_hour'] = fp_rate
     

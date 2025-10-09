@@ -24,3 +24,6 @@ tqdm>=4.62.0
 # Optional: CUDA support
 # torch[cu111] if using CUDA 11.1
 # torchaudio[cu111]
+
+# Text-to-Speech / ElevenLabs API
+elevenlabs>=1.0.0
