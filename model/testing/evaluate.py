@@ -11,7 +11,6 @@ import time
 import logging
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
-
 import numpy as np
 import onnxruntime as ort
 import soundfile as sf
@@ -19,6 +18,7 @@ import librosa
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support, confusion_matrix
 import matplotlib.pyplot as plt
 import seaborn as sns
+import pandas as pd
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -90,43 +90,15 @@ class ModelEvaluator:
         else:
             return prediction, inference_time
     
-    def evaluate_test_set(self, test_dir: str, phrase: str) -> Dict:
+    def evaluate_test_set(self, manifest: dict, phrase: str) -> Dict:
         """Evaluate model on test dataset"""
-        logger.info(f"Evaluating model on test set: {test_dir}")
         
-        test_path = Path(test_dir)
-        
-        predictions = []
-        confidences = []
-        true_labels = []
-        inference_times = []
-        
-        # Test positive samples
-        positive_dir = test_path / 'test'
-        if positive_dir.exists():
-            for audio_file in positive_dir.glob('*.wav'):
-                features = self.preprocess_audio(str(audio_file))
-                pred, conf, inf_time = self.predict(features)
-                
-                predictions.append(pred)
-                confidences.append(conf)
-                true_labels.append(1)  # Positive sample
-                inference_times.append(inf_time)
-        
-        # Test negative samples (use a subset)
-        negative_dir = test_path.parent / 'negative'
-        if negative_dir.exists():
-            negative_files = list(negative_dir.glob('*.wav'))[:100]  # Limit to 100 for speed
-            
-            for audio_file in negative_files:
-                features = self.preprocess_audio(str(audio_file))
-                pred, conf, inf_time = self.predict(features)
-                
-                predictions.append(pred)
-                confidences.append(conf)
-                true_labels.append(0)  # Negative sample
-                inference_times.append(inf_time)
-        
+    
+        df = pd.DataFrame(manifest['test'][f'positive_samples'] + manifest['test'][f'negative_samples'])
+        true_labels = df['label'].to_list()
+        pred_tuple = df['file'].map(self.preprocess_audio).map(self.predict)
+        predictions, confidences, inference_times = pred_tuple.str[0].to_list(), pred_tuple.str[1].to_list(), pred_tuple.str[2].to_list()
+
         # Calculate metrics
         accuracy = accuracy_score(true_labels, predictions)
         precision, recall, f1, support = precision_recall_fscore_support(
@@ -161,12 +133,11 @@ class ModelEvaluator:
         
         return results
     
-    def test_false_positive_rate(self, negative_audio_dir: str, duration_hours: float = 1.0) -> float:
+    def test_false_positive_rate(self, manifest: dict, duration_hours: float = 1.0) -> float:
         """Test false positive rate over extended audio"""
         logger.info(f"Testing false positive rate over {duration_hours} hours of audio")
         
-        negative_path = Path(negative_audio_dir)
-        audio_files = list(negative_path.glob('*.wav'))
+        audio_files = pd.DataFrame(manifest['test']['negative_samples'])['file'].to_list()
         
         if not audio_files:
             logger.warning("No negative audio files found")
@@ -289,7 +260,7 @@ def main():
     parser.add_argument('--test-data', required=True,
                        help='Path to test data directory')
     parser.add_argument('--phrase', required=True,
-                       choices=['hey-ozwell', 'im-done', 'go-ozwell', 'ozwell-go'],
+                       choices=['hey-ozwell', "ozwell-i'm-done", 'go-ozwell', 'ozwell-go'],
                        help='Wake phrase being evaluated')
     parser.add_argument('--output-dir', default='../results',
                        help='Directory to save evaluation results')

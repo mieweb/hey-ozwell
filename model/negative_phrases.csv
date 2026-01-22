@@ -1,0 +1,401 @@
+wake_phrase,negative_phrase
+hey ozwell,hey odds bell
+hey ozwell,hey ox hill
+hey ozwell,hey old shell
+hey ozwell,hey moss fell
+hey ozwell,hey off trail
+hey ozwell,hey raw cell
+hey ozwell,hey lost bell
+hey ozwell,hey cross hill
+hey ozwell,hey frost bell
+hey ozwell,hey box sell
+hey ozwell,hey notch fell
+hey ozwell,hey cost shell
+hey ozwell,hey broad sail
+hey ozwell,hey soft yell
+hey ozwell,hey tossed mail
+hey ozwell,hey lock cell
+hey ozwell,hey top shelf
+hey ozwell,hey rock sail
+hey ozwell,hey odd smell
+hey ozwell,hey tall bell
+hey ozwell,hey stock well
+hey ozwell,hey cough fell
+hey ozwell,hey moss shell
+hey ozwell,hey dock sale
+hey ozwell,hey cross sale
+hey ozwell,hey hot spell
+hey ozwell,hey off sell
+hey ozwell,hey rough cell
+hey ozwell,hey boss fell
+hey ozwell,hey notch shell
+hey ozwell,hey frost shell
+hey ozwell,hey dark sail
+hey ozwell,hey soft shell
+hey ozwell,hey lost sail
+hey ozwell,hey broad cell
+hey ozwell,hey chalk bell
+hey ozwell,hey shock fell
+hey ozwell,hey moss bell
+hey ozwell,hey odd shell
+hey ozwell,hey rock cell
+hey ozwell,hey toss shell
+hey ozwell,hey dock fell
+hey ozwell,hey cross bell
+hey ozwell,hey off cell
+hey ozwell,hey soft bell
+hey ozwell,hey stock shell
+hey ozwell,hey lock sale
+hey ozwell,hey odd bell
+hey ozwell,hey rough shell
+hey ozwell,hey cost bell
+hey ozwell,hey tall shell
+hey ozwell,hey frost sail
+hey ozwell,hey box shell
+hey ozwell,hey moss cell
+hey ozwell,hey shock bell
+hey ozwell,hey off bell
+hey ozwell,hey cross shell
+hey ozwell,hey dock shell
+hey ozwell,hey lost cell
+hey ozwell,hey broad shell
+hey ozwell,hey soft sail
+hey ozwell,hey notch bell
+hey ozwell,hey chalk fell
+hey ozwell,hey odd sail
+hey ozwell,hey rock shell
+hey ozwell,hey toss bell
+hey ozwell,hey stock sail
+hey ozwell,hey rough bell
+hey ozwell,hey dark cell
+hey ozwell,hey moss sail
+hey ozwell,hey cost shell
+hey ozwell,hey off shell
+hey ozwell,hey frost cell
+hey ozwell,hey dock bell
+hey ozwell,hey soft cell
+hey ozwell,hey broad bell
+hey ozwell,hey cross sail
+hey ozwell,hey lost shell
+hey ozwell,hey odd cell
+hey ozwell,hey shock shell
+hey ozwell,hey lock bell
+hey ozwell,hey moss fell again
+hey ozwell,hey chalk shell
+hey ozwell,hey tall sail
+hey ozwell,hey rough sail
+hey ozwell,hey stock bell
+hey ozwell,hey off sail
+hey ozwell,hey dock cell
+hey ozwell,hey cross fell
+hey ozwell,hey cost sail
+hey ozwell,hey soft fell
+hey ozwell,hey notch cell
+hey ozwell,hey moss shell again
+hey ozwell,hey shock sail
+hey ozwell,hey lost bell again
+hey ozwell,hey broad fell
+hey ozwell,hey rock bell
+hey ozwell,hey odd fell
+hey ozwell,hey chalk sail
+hey ozwell,hey soft bell again
+ozwell i'm done,odd bell I'm late
+ozwell i'm done,off shell I'm tired
+ozwell i'm done,moss fell I'm lost
+ozwell i'm done,cross hill I'm fine
+ozwell i'm done,stock well I'm out
+ozwell i'm done,box sell I'm ready
+ozwell i'm done,rough cell I'm waiting
+ozwell i'm done,cost shell I'm unsure
+ozwell i'm done,dock fell I'm thinking
+ozwell i'm done,soft yell I'm quiet
+ozwell i'm done,tall bell I'm here
+ozwell i'm done,lost shell I'm early
+ozwell i'm done,frost cell I'm cold
+ozwell i'm done,odd shell I'm moving
+ozwell i'm done,moss bell I'm back
+ozwell i'm done,cross sale I'm walking
+ozwell i'm done,off trail I'm running
+ozwell i'm done,chalk bell I'm reading
+ozwell i'm done,lock cell I'm writing
+ozwell i'm done,stock shell I'm waiting
+ozwell i'm done,rough bell I'm working
+ozwell i'm done,dock shell I'm eating
+ozwell i'm done,soft bell I'm resting
+ozwell i'm done,broad cell I'm talking
+ozwell i'm done,moss shell I'm thinking
+ozwell i'm done,odd sail I'm drifting
+ozwell i'm done,cross bell I'm listening
+ozwell i'm done,frost shell I'm frozen
+ozwell i'm done,lost bell I'm quiet
+ozwell i'm done,box shell I'm packing
+ozwell i'm done,cost bell I'm learning
+ozwell i'm done,tall shell I'm sitting
+ozwell i'm done,off cell I'm driving
+ozwell i'm done,chalk shell I'm drawing
+ozwell i'm done,moss cell I'm reading
+ozwell i'm done,shock bell I'm startled
+ozwell i'm done,dock cell I'm calling
+ozwell i'm done,soft shell I'm humming
+ozwell i'm done,stock sail I'm floating
+ozwell i'm done,rough shell I'm standing
+ozwell i'm done,broad bell I'm stretching
+ozwell i'm done,odd cell I'm walking
+ozwell i'm done,cross shell I'm waiting
+ozwell i'm done,frost bell I'm shivering
+ozwell i'm done,lost cell I'm watching
+ozwell i'm done,box bell I'm lifting
+ozwell i'm done,cost cell I'm typing
+ozwell i'm done,dock bell I'm knocking
+ozwell i'm done,soft cell I'm breathing
+ozwell i'm done,tall sail I'm gliding
+ozwell i'm done,moss sail I'm boating
+ozwell i'm done,odd bell I'm early
+ozwell i'm done,stock bell I'm loading
+ozwell i'm done,rough cell I'm pacing
+ozwell i'm done,chalk sail I'm painting
+ozwell i'm done,broad shell I'm relaxing
+ozwell i'm done,off shell I'm guessing
+ozwell i'm done,cross cell I'm counting
+ozwell i'm done,frost sail I'm skiing
+ozwell i'm done,lost sail I'm wandering
+ozwell i'm done,box cell I'm storing
+ozwell i'm done,cost shell I'm debating
+ozwell i'm done,dock sail I'm rowing
+ozwell i'm done,soft sail I'm whispering
+ozwell i'm done,tall cell I'm waiting
+ozwell i'm done,moss bell I'm listening
+ozwell i'm done,odd shell I'm nodding
+ozwell i'm done,stock cell I'm planning
+ozwell i'm done,rough sail I'm drifting
+ozwell i'm done,chalk cell I'm measuring
+ozwell i'm done,broad sail I'm cruising
+ozwell i'm done,off bell I'm pausing
+ozwell i'm done,cross sail I'm gliding
+ozwell i'm done,frost cell I'm cooling
+ozwell i'm done,lost shell I'm hiding
+ozwell i'm done,box sail I'm shipping
+ozwell i'm done,cost sail I'm saving
+ozwell i'm done,dock shell I'm watching
+ozwell i'm done,soft bell I'm smiling
+ozwell i'm done,tall bell I'm waving
+ozwell i'm done,moss cell I'm pausing
+ozwell i'm done,odd sail I'm turning
+ozwell i'm done,stock shell I'm folding
+ozwell i'm done,rough bell I'm knocking
+ozwell i'm done,chalk bell I'm erasing
+ozwell i'm done,broad cell I'm dialing
+ozwell i'm done,off cell I'm parking
+ozwell i'm done,cross bell I'm ringing
+ozwell i'm done,frost shell I'm melting
+ozwell i'm done,lost cell I'm scanning
+ozwell i'm done,box shell I'm sealing
+ozwell i'm done,cost cell I'm totaling
+ozwell i'm done,dock cell I'm anchoring
+ozwell i'm done,soft shell I'm resting
+ozwell i'm done,tall shell I'm leaning
+ozwell i'm done,moss sail I'm fishing
+ozwell i'm done,odd bell I'm leaving
+ozwell i'm done,stock sail I'm coasting
+ozwell i'm done,rough shell I'm settling
+ozwell i'm done,chalk shell I'm cleaning
+go ozwell,go odd bell
+go ozwell,go off shell
+go ozwell,go moss fell
+go ozwell,go cross hill
+go ozwell,go stock well
+go ozwell,go box sell
+go ozwell,go rough cell
+go ozwell,go cost shell
+go ozwell,go dock fell
+go ozwell,go soft yell
+go ozwell,go tall bell
+go ozwell,go lost shell
+go ozwell,go frost cell
+go ozwell,go odd shell
+go ozwell,go moss bell
+go ozwell,go cross sale
+go ozwell,go off trail
+go ozwell,go chalk bell
+go ozwell,go lock cell
+go ozwell,go stock shell
+go ozwell,go rough bell
+go ozwell,go dock shell
+go ozwell,go soft bell
+go ozwell,go broad cell
+go ozwell,go moss shell
+go ozwell,go odd sail
+go ozwell,go cross bell
+go ozwell,go frost shell
+go ozwell,go lost bell
+go ozwell,go box shell
+go ozwell,go cost bell
+go ozwell,go tall shell
+go ozwell,go off cell
+go ozwell,go chalk shell
+go ozwell,go moss cell
+go ozwell,go shock bell
+go ozwell,go dock cell
+go ozwell,go soft shell
+go ozwell,go stock sail
+go ozwell,go rough shell
+go ozwell,go broad bell
+go ozwell,go odd cell
+go ozwell,go cross shell
+go ozwell,go frost bell
+go ozwell,go lost cell
+go ozwell,go box bell
+go ozwell,go cost cell
+go ozwell,go dock bell
+go ozwell,go soft cell
+go ozwell,go tall sail
+go ozwell,go moss sail
+go ozwell,go odd bell again
+go ozwell,go stock bell
+go ozwell,go rough cell again
+go ozwell,go chalk sail
+go ozwell,go broad shell
+go ozwell,go off shell again
+go ozwell,go cross cell
+go ozwell,go frost sail
+go ozwell,go lost sail
+go ozwell,go box cell
+go ozwell,go cost shell again
+go ozwell,go dock sail
+go ozwell,go soft sail
+go ozwell,go tall cell
+go ozwell,go moss bell again
+go ozwell,go odd shell again
+go ozwell,go stock cell
+go ozwell,go rough sail
+go ozwell,go chalk cell
+go ozwell,go broad sail
+go ozwell,go off bell
+go ozwell,go cross sail
+go ozwell,go frost cell again
+go ozwell,go lost shell again
+go ozwell,go box sail
+go ozwell,go cost sail
+go ozwell,go dock shell again
+go ozwell,go soft bell again
+go ozwell,go tall bell again
+go ozwell,go moss cell again
+go ozwell,go odd sail again
+go ozwell,go stock shell again
+go ozwell,go rough bell again
+go ozwell,go chalk bell again
+go ozwell,go broad cell again
+go ozwell,go off cell again
+go ozwell,go cross bell again
+go ozwell,go frost shell again
+go ozwell,go lost cell again
+go ozwell,go box shell again
+go ozwell,go cost cell again
+go ozwell,go dock cell again
+go ozwell,go soft shell again
+go ozwell,go tall shell again
+go ozwell,go moss sail again
+go ozwell,go odd bell final
+go ozwell,go stock sail again
+go ozwell,go rough shell again
+go ozwell,go chalk shell again
+ozwell go,odd bell goes
+ozwell go,off shell moves
+ozwell go,moss fell drifts
+ozwell go,cross hill runs
+ozwell go,stock well turns
+ozwell go,box sell drops
+ozwell go,rough cell waits
+ozwell go,cost shell breaks
+ozwell go,dock fell tips
+ozwell go,soft yell fades
+ozwell go,tall bell rings
+ozwell go,lost shell rolls
+ozwell go,frost cell cools
+ozwell go,odd shell shifts
+ozwell go,moss bell sounds
+ozwell go,cross sale ends
+ozwell go,off trail bends
+ozwell go,chalk bell cracks
+ozwell go,lock cell opens
+ozwell go,stock shell folds
+ozwell go,rough bell knocks
+ozwell go,dock shell floats
+ozwell go,soft bell hums
+ozwell go,broad cell spreads
+ozwell go,moss shell rests
+ozwell go,odd sail tilts
+ozwell go,cross bell chimes
+ozwell go,frost shell melts
+ozwell go,lost bell echoes
+ozwell go,box shell seals
+ozwell go,cost bell counts
+ozwell go,tall shell leans
+ozwell go,off cell parks
+ozwell go,chalk shell smudges
+ozwell go,moss cell reads
+ozwell go,shock bell clangs
+ozwell go,dock cell anchors
+ozwell go,soft shell settles
+ozwell go,stock sail glides
+ozwell go,rough shell steadies
+ozwell go,broad bell tolls
+ozwell go,odd cell clicks
+ozwell go,cross shell overlaps
+ozwell go,frost bell freezes
+ozwell go,lost cell scans
+ozwell go,box bell lifts
+ozwell go,cost cell totals
+ozwell go,dock bell signals
+ozwell go,soft cell breathes
+ozwell go,tall sail drifts
+ozwell go,moss sail floats
+ozwell go,odd bell waits
+ozwell go,stock bell rings
+ozwell go,rough cell paces
+ozwell go,chalk sail paints
+ozwell go,broad shell relaxes
+ozwell go,off shell guesses
+ozwell go,cross cell counts
+ozwell go,frost sail slides
+ozwell go,lost sail wanders
+ozwell go,box cell stores
+ozwell go,cost shell debates
+ozwell go,dock sail rows
+ozwell go,soft sail whispers
+ozwell go,tall cell pauses
+ozwell go,moss bell listens
+ozwell go,odd shell nods
+ozwell go,stock cell plans
+ozwell go,rough sail drifts
+ozwell go,chalk cell measures
+ozwell go,broad sail cruises
+ozwell go,off bell pauses
+ozwell go,cross sail glides
+ozwell go,frost cell cools
+ozwell go,lost shell hides
+ozwell go,box sail ships
+ozwell go,cost sail saves
+ozwell go,dock shell watches
+ozwell go,soft bell smiles
+ozwell go,tall bell waves
+ozwell go,moss cell pauses
+ozwell go,odd sail turns
+ozwell go,stock shell folds
+ozwell go,rough bell knocks
+ozwell go,chalk bell erases
+ozwell go,broad cell dials
+ozwell go,off cell parks
+ozwell go,cross bell rings
+ozwell go,frost shell melts
+ozwell go,lost cell scans
+ozwell go,box shell seals
+ozwell go,cost cell totals
+ozwell go,dock cell anchors
+ozwell go,soft shell rests
+ozwell go,tall shell leans
+ozwell go,moss sail fishes
+ozwell go,odd bell leaves
+ozwell go,stock sail coasts
+ozwell go,rough shell settles
+ozwell go,chalk shell cleans

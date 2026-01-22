@@ -15,7 +15,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 # Wake phrases to train
-WAKE_PHRASES = ['hey-ozwell', 'im-done', 'go-ozwell', 'ozwell-go']
+WAKE_PHRASES = ['hey-ozwell', 'ozwell-im-done', 'go-ozwell', 'ozwell-go']
 
 # Training configuration
 TRAINING_CONFIG = {

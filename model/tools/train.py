@@ -21,6 +21,7 @@ import librosa
 from sklearn.metrics import accuracy_score, classification_report
 import onnx
 import onnxruntime
+import pandas as pd 
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -43,15 +44,7 @@ class AudioDataset(Dataset):
             self.manifest = json.load(f)
         
         # Combine positive and negative samples
-        self.samples = []
-        
-        # Add positive samples
-        for sample in self.manifest['positive_samples']:
-            self.samples.append((sample['file'], 1))
-        
-        # Add negative samples
-        for sample in self.manifest['negative_samples']:
-            self.samples.append((sample['file'], 0))
+        self.samples = pd.DataFrame(self.manifest['train']['positive_samples'] + self.manifest['train']['positive_samples']).get(columns=['file', 'label']).to
         
         logger.info(f"Loaded {len(self.samples)} samples from {manifest_file}")
     
@@ -285,7 +278,7 @@ class WakeWordTrainer:
 def main():
     parser = argparse.ArgumentParser(description='Train Hey Ozwell wake-word model')
     parser.add_argument('--phrase', required=True, 
-                       choices=['hey-ozwell', 'im-done', 'go-ozwell', 'ozwell-go'],
+                       choices=['hey-ozwell', "ozwell-i'm-done", 'go-ozwell', 'ozwell-go'],
                        help='Wake phrase to train model for')
     parser.add_argument('--data-dir', default='../data',
                        help='Directory containing training data')

@@ -6,7 +6,7 @@ Collects and prepares training datasets for the four wake phrases.
 
 import os
 import argparse
-import json
+import simplejson as json
 import random
 import numpy as np
 import soundfile as sf
@@ -14,6 +14,13 @@ import librosa
 from pathlib import Path
 from typing import List, Tuple, Dict
 import logging
+from elevenlabs import ElevenLabs
+from dotenv import load_dotenv
+import pandas as pd
+import re
+import string
+
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -24,123 +31,100 @@ class DataPreparer:
     
     WAKE_PHRASES = {
         'hey-ozwell': ['hey ozwell', 'hey oswell', 'hay ozwell'],
-        'im-done': ['ozwell im done', 'ozwell i am done', 'oswell im done', 'ozwell done'],
+        "ozwell-i'm-done": ['ozwell im done', 'ozwell i am done', 'oswell im done', 'ozwell done'],
         'go-ozwell': ['go ozwell', 'go oswell'],
         'ozwell-go': ['ozwell go', 'oswell go']
     }
+
+    NEGATIVE_PHRASES = {
+        'hey-ozwell': ['hey oswald', 'hey amal', 'hey paul', 'nay ozwell', 'he is well'],
+        "ozwell-i'm-done": ["oswald i'm done", "ozwell i'm not done", 'ozwell is fun', "oh swell i'm done"],
+        'go-ozwell': ['go oswald', 'no ozwell', 'so ozwell', 'show ozwell', 'go amal', 'go call', 'gauze well', 'go with the flow'],
+        'ozwell-go': ['oswald go', 'ozwell no', 'ozwell show', 'ozwell dont', 'ozwell knows', 'is it slow', 'was mellow', "oh we'll know", "'cause we'll know"]
+    }
     
-    def __init__(self, data_dir: str = '../data', sample_rate: int = 16000):
+    def __init__(self, data_dir: str = '../data', wake_phrases_csv: str | None = None, negative_phrases_csv: str | None = None, sample_rate: int = 16000):
         self.data_dir = Path(data_dir)
         self.sample_rate = sample_rate
         
         # Create directory structure
         for phrase in self.WAKE_PHRASES.keys():
             phrase_dir = self.data_dir / phrase
-            for split in ['positive', 'negative', 'test']:
+            for split in ['test/positive', 'test/negative', 'test/positive', 'test/negative']:
                 (phrase_dir / split).mkdir(parents=True, exist_ok=True)
+
+        # If passed a path to a csv file, add the positive variants to WAKE_PHRASES
+        if wake_phrases_csv:
+            df = pd.read_csv(wake_phrases_csv)
+            for group_name, group in df.groupby('wake_phrase'):
+                key = group_name.replace(' ', '-')
+                positive_phrases = self.WAKE_PHRASES.get(key, [])
+                positive_phrases.extend(group['positive_phrase'].to_list())
+                positive_phrases = list(set(positive_phrases))
+                self.WAKE_PHRASES[key] = positive_phrases
+
+        # If passed a path to a csv file, add the negative pharse to NEGATIVE_PHRASES
+        if negative_phrases_csv:
+            df = pd.read_csv(negative_phrases_csv)
+            for group_name, group in df.groupby('wake_phrase'):
+                key = group_name.replace(' ', '-')
+                negative_phrases = self.NEGATIVE_PHRASES.get(key, [])
+                negative_phrases.extend(group['negative_phrase'].to_list())
+                negative_phrases = list(set(negative_phrases))
+                self.NEGATIVE_PHRASES[key] = negative_phrases
+
+        # Initialize ElevenLabs client
+        self.client = ElevenLabs(api_key=os.getenv("ELEVEN_API_KEY"))
+        voices_response = self.client.voices.get_all()
+        self.voices = voices_response.voices
     
-    def collect_samples(self, phrase: str, positive_count: int = 500, negative_count: int = 2000):
+
+    def collect_samples(self, phrase: str, samples: dict, reset_idx: bool = False):
         """
         Collect training samples for a specific phrase
         
         Args:
             phrase: Target wake phrase
-            positive_count: Number of positive samples to collect
-            negative_count: Number of negative samples to collect
+            samples: Dictionary where keys are a Tuple (split, sample_type) and values are the number of samples to generate
+            reset_idx: if True will begin naming files starting from 1 after the maximum existing idx, otherwise starts from 0
         """
+
+        # assert samples.keys()
         logger.info(f"Collecting samples for phrase: {phrase}")
-        
         if phrase not in self.WAKE_PHRASES:
             raise ValueError(f"Unknown phrase: {phrase}")
-        
-        # For now, create placeholder files since we don't have real audio data
-        # In production, this would integrate with recording tools or existing datasets
-        
+                
         phrase_dir = self.data_dir / phrase
-        
-        # Generate positive samples (placeholder)
-        logger.info(f"Generating {positive_count} positive samples...")
-        for i in range(positive_count):
-            audio_data = self._generate_placeholder_audio(phrase, positive=True)
-            filename = phrase_dir / 'positive' / f'{phrase}_{i:04d}.wav'
-            sf.write(filename, audio_data, self.sample_rate)
-        
-        # Generate negative samples (placeholder)
-        logger.info(f"Generating {negative_count} negative samples...")
-        for i in range(negative_count):
-            audio_data = self._generate_placeholder_audio(phrase, positive=False)
-            filename = phrase_dir / 'negative' / f'negative_{i:04d}.wav'
-            sf.write(filename, audio_data, self.sample_rate)
-        
-        # Split some samples for testing
-        test_count = min(50, positive_count // 10)
-        logger.info(f"Creating {test_count} test samples...")
-        for i in range(test_count):
-            audio_data = self._generate_placeholder_audio(phrase, positive=True)
-            filename = phrase_dir / 'test' / f'test_{i:04d}.wav'
-            sf.write(filename, audio_data, self.sample_rate)
-        
-        # Create metadata file
-        metadata = {
-            'phrase': phrase,
-            'variations': self.WAKE_PHRASES[phrase],
-            'positive_count': positive_count,
-            'negative_count': negative_count,
-            'test_count': test_count,
-            'sample_rate': self.sample_rate,
-            'duration_range': [0.5, 3.0],  # seconds
-        }
-        
-        metadata_file = phrase_dir / 'metadata.json'
-        with open(metadata_file, 'w') as f:
-            json.dump(metadata, f, indent=2)
-        
+        manifest = self.get_manifest(phrase)
+
+        for (split, sample_type), num_samples in samples.items():
+            label = 1 if (sample_type == "positive") else 0
+            logger.info(f"Generating {num_samples} {sample_type} samples ({split})...")
+            start_idx = 0 if (reset_idx or (len(os.listdir(phrase_dir / split / sample_type)) == 0)) else max(list(map(lambda x: int(re.match(r'(\d+)_.*\.wav', x)[1]), os.listdir(phrase_dir / split / sample_type)))) + 1
+            for i in range(start_idx, start_idx + num_samples):
+                try:
+                    selected_phrase = self.select_phrase(phrase, (sample_type == 'positive'))
+                    voice = random.choice(self.voices)
+                    audio = self.client.text_to_speech.convert(
+                        voice_id=voice.voice_id,
+                        model_id="eleven_multilingual_v2",
+                        text=selected_phrase
+                    )
+                    filename = phrase_dir / split / sample_type / f'{i:04d}_{re.sub(r' +', '_', re.sub(r' - .*', '', voice.name)).strip('_')}.wav'
+                    # save audio to file
+                    with open(filename, "wb") as f:
+                        for chunk in audio:
+                            if chunk:
+                                f.write(chunk)
+                    manifest[split][f"{sample_type}_samples"].append({"file": str(filename), "label": label, "phrase": selected_phrase, "augmented": None, "voice": voice.name})
+                except:
+                    logger.error(f'Problem rose during generation of {filename} ({split})...saving manifest')
+                    self.save_manifest(phrase, manifest)
+                    return
+
+        self.save_manifest(phrase, manifest)
         logger.info(f"Data collection complete for {phrase}")
-    
-    def _generate_placeholder_audio(self, phrase: str, positive: bool = True, duration: float = None) -> np.ndarray:
-        """
-        Generate placeholder audio data for demonstration
-        In production, this would be replaced with real audio recordings
-        """
-        if duration is None:
-            duration = random.uniform(0.5, 3.0)
-        
-        samples = int(duration * self.sample_rate)
-        
-        if positive:
-            # Generate speech-like signal with some structure
-            t = np.linspace(0, duration, samples)
-            
-            # Create formant-like frequencies for speech simulation
-            f1 = 300 + 200 * np.sin(2 * np.pi * 2 * t)  # First formant
-            f2 = 1200 + 800 * np.sin(2 * np.pi * 3 * t)  # Second formant
-            
-            signal = (0.3 * np.sin(2 * np.pi * f1 * t) + 
-                     0.2 * np.sin(2 * np.pi * f2 * t))
-            
-            # Add envelope to simulate speech timing
-            envelope = np.exp(-3 * (t - duration/2)**2 / duration**2)
-            signal *= envelope
-            
-        else:
-            # Generate noise or non-speech audio
-            if random.random() < 0.5:
-                # White noise
-                signal = 0.1 * np.random.randn(samples)
-            else:
-                # Tonal noise (not speech-like)
-                t = np.linspace(0, duration, samples)
-                freq = random.uniform(100, 8000)
-                signal = 0.2 * np.sin(2 * np.pi * freq * t)
-        
-        # Add some background noise
-        noise = 0.01 * np.random.randn(samples)
-        signal += noise
-        
-        # Ensure signal is in valid range
-        signal = np.clip(signal, -0.95, 0.95)
-        
-        return signal.astype(np.float32)
+
     
     def augment_data(self, phrase: str, augmentation_factor: int = 3):
         """
@@ -151,25 +135,39 @@ class DataPreparer:
             augmentation_factor: How many augmented versions to create per original
         """
         logger.info(f"Augmenting data for phrase: {phrase}")
-        
-        phrase_dir = self.data_dir / phrase
-        positive_dir = phrase_dir / 'positive'
-        
-        # Get list of original files
-        original_files = list(positive_dir.glob('*.wav'))
-        
-        for original_file in original_files:
-            audio, sr = librosa.load(original_file, sr=self.sample_rate)
-            
-            for aug_idx in range(augmentation_factor):
-                # Apply random augmentations
-                augmented = self._apply_augmentation(audio)
                 
-                # Save augmented file
-                aug_filename = positive_dir / f'{original_file.stem}_aug_{aug_idx}.wav'
-                sf.write(aug_filename, augmented, self.sample_rate)
-        
-        logger.info(f"Augmentation complete. Created {len(original_files) * augmentation_factor} additional samples")
+        manifest = self.get_manifest(phrase)
+
+        for split in ['train', 'test']:
+            for sample_type in ['positive', 'negative']:
+                df = pd.DataFrame(manifest[split][f'{sample_type}_samples'])
+                if df.empty:
+                    continue
+                orig = df[df['augmented'].isnull()]
+                orig['existing_augs'] = orig['file'].map(lambda x: (df['augmented'] == x).sum())
+                orig = orig[orig['existing_augs'].lt(augmentation_factor)]
+                if orig.empty:
+                    continue
+                audio = orig['file'].map(lambda x: librosa.load(Path(x), sr=self.sample_rate)[0])
+                audio.name = 'audio'
+                for aug_id in range(min(orig['existing_augs']), augmentation_factor):
+                    try:
+                        filter = orig['existing_augs'].le(aug_id)
+                        if not filter.any():
+                            continue
+                        aug_audio = audio.loc[filter].map(self._apply_augmentation)
+                        aug_df = orig[filter].drop(columns=['existing_augs']).copy()
+                        aug_df['augmented'] = aug_df['file']
+                        aug_df['file'] = aug_df['file'].str.replace('.wav', f'_aug_{aug_id}.wav')
+
+                        # Save augmented audio
+                        pd.concat((aug_df['file'], aug_audio), axis=1).apply(lambda row: sf.write(row['file'], row['audio'], self.sample_rate), axis=1)
+                        manifest[split][f'{sample_type}_samples'].extend(aug_df.to_dict(orient='records'))
+                    except:
+                        logger.error(f'Problem augmeting {aug_id/augmentation_factor} {sample_type} samples for {split}...saving_manifest')
+                        self.save_manifest(phrase, manifest)
+        self.save_manifest(phrase, manifest)
+        logger.info(f"Augmentation complete.")
     
     def _apply_augmentation(self, audio: np.ndarray) -> np.ndarray:
         """Apply random augmentation to audio sample"""
@@ -195,62 +193,56 @@ class DataPreparer:
         
         return audio.astype(np.float32)
     
-    def create_training_manifest(self, phrase: str):
-        """Create training manifest file for the phrase"""
-        phrase_dir = self.data_dir / phrase
-        
-        manifest = {
-            'positive_samples': [],
-            'negative_samples': [],
-            'test_samples': []
-        }
-        
-        # Collect positive samples
-        positive_dir = phrase_dir / 'positive'
-        for audio_file in positive_dir.glob('*.wav'):
-            manifest['positive_samples'].append({
-                'file': str(audio_file.relative_to(self.data_dir)),
-                'label': 1,
-                'phrase': phrase
-            })
-        
-        # Collect negative samples
-        negative_dir = phrase_dir / 'negative'
-        for audio_file in negative_dir.glob('*.wav'):
-            manifest['negative_samples'].append({
-                'file': str(audio_file.relative_to(self.data_dir)),
-                'label': 0,
-                'phrase': 'negative'
-            })
-        
-        # Collect test samples
-        test_dir = phrase_dir / 'test'
-        for audio_file in test_dir.glob('*.wav'):
-            manifest['test_samples'].append({
-                'file': str(audio_file.relative_to(self.data_dir)),
-                'label': 1,
-                'phrase': phrase
-            })
-        
-        # Save manifest
-        manifest_file = phrase_dir / 'training_manifest.json'
-        with open(manifest_file, 'w') as f:
-            json.dump(manifest, f, indent=2)
-        
-        logger.info(f"Training manifest created: {manifest_file}")
-        logger.info(f"  Positive: {len(manifest['positive_samples'])}")
-        logger.info(f"  Negative: {len(manifest['negative_samples'])}")
-        logger.info(f"  Test: {len(manifest['test_samples'])}")
+    def get_sample_counts(self, phrase: str):
+        manifest = self.get_manifest(phrase)
+        counts = {}
+        for split in  ['train', 'test'] :
+            for sample_type in ['positive', 'negative']:
+                df = pd.DataFrame(manifest[split][f'{sample_type}_samples'])
+                counts[(split, sample_type, 'orig')] = len(df[df['augmented'].isnull()])  if len(df) > 0 else 0
+                counts[(split, sample_type, 'aug')] = len(df[~df['augmented'].isnull()]) if len(df) > 0 else 0
+        return counts
+    
+    def get_manifest(self, phrase_key: str):
+        """
+        Get training manifest for a specific phrase
+
+        phrase_key: phrase to get manifest for
+        """
+        manifest_path = self.data_dir / phrase_key / "training_manifest.json"
+        if os.path.exists(manifest_path):
+            with open(manifest_path, 'r') as file:
+                manifest = json.load(file)
+        else:
+            manifest = {'train': {'positive_samples': [], 'negative_samples': []}, 'test': {'positive_samples': [], 'negative_samples': []}}
+        return manifest
+    
+    def save_manifest(self, phrase_key: str, manifest: dict):
+        """
+        Save training manifest for a specific phrase
+
+        phrase_key: phrase to save manifest to
+        """
+        manifest_path = self.data_dir / phrase_key / "training_manifest.json"
+        with open(manifest_path, 'w') as file:
+            json.dump(manifest, file, indent=4, ignore_nan=True)
+    
+    def select_phrase(self, phrase_key: str, positive: bool):
+        if positive:
+            return phrase_key.replace('-', ' ')
+        else:
+            return random.choice(self.NEGATIVE_PHRASES[phrase_key])
 
 
 def main():
     parser = argparse.ArgumentParser(description='Prepare training data for Hey Ozwell wake-word models')
-    parser.add_argument('--phrase', required=True, choices=['hey-ozwell', 'im-done', 'go-ozwell', 'ozwell-go'],
+    parser.add_argument('--phrase', required=True, choices=['hey-ozwell', "ozwell-i'm-done", 'go-ozwell', 'ozwell-go'],
                        help='Wake phrase to prepare data for')
     parser.add_argument('--positive-samples', type=int, default=500,
                        help='Number of positive samples to generate')
     parser.add_argument('--negative-samples', type=int, default=2000,
                        help='Number of negative samples to generate')
+    parser.add_argument('--test-split-factor', type=float, default=0.2, help='Fraction of samples to split for testing')
     parser.add_argument('--augment', action='store_true',
                        help='Apply data augmentation after collection')
     parser.add_argument('--augment-factor', type=int, default=3,
@@ -261,24 +253,31 @@ def main():
     args = parser.parse_args()
     
     # Initialize data preparer
-    preparer = DataPreparer(data_dir=args.data_dir)
-    
+    preparer = DataPreparer(data_dir=args.data_dir, negative_phrases_csv='../negative_phrases.csv')
+    existing_sample_counts = preparer.get_sample_counts(args.phrase)
+    print(f"Counts of existing samples: {existing_sample_counts}")
+    assert args.test_split_factor >= 0.0 and args.test_split_factor <= 1.0
+    generate_samples = {}
+    for split in ['train', 'test']:
+        split_factor = (1.0 - args.test_split_factor) if split == 'train' else args.test_split_factor
+        for sample_type in ['positive', 'negative']:
+            num_samples = args.positive_samples if (sample_type == 'positive') else args.negative_samples
+            generate_samples[split, sample_type] = max(0, round(num_samples * split_factor) - existing_sample_counts[split, sample_type, 'orig'])
+
     # Collect samples
     preparer.collect_samples(
         phrase=args.phrase,
-        positive_count=args.positive_samples,
-        negative_count=args.negative_samples
+        samples=generate_samples,
+        reset_idx=False
     )
     
     # Apply augmentation if requested
     if args.augment:
         preparer.augment_data(args.phrase, args.augment_factor)
     
-    # Create training manifest
-    preparer.create_training_manifest(args.phrase)
-    
     logger.info("Data preparation complete!")
 
 
 if __name__ == '__main__':
     main()
+    
