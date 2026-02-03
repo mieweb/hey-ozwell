@@ -26,147 +26,130 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+WAKE_PHRASES = {
+    'hey-ozwell': ['hey ozwell', 'hey oswell', 'hay ozwell'],
+    "ozwell-i'm-done": ['ozwell im done', 'ozwell i am done', 'oswell im done', 'ozwell done'],
+    'go-ozwell': ['go ozwell', 'go oswell'],
+    'ozwell-go': ['ozwell go', 'oswell go']
+}
+
+NEGATIVE_PHRASES = {
+    'hey-ozwell': ['hey oswald', 'hey amal', 'hey paul', 'nay ozwell', 'he is well'],
+    "ozwell-i'm-done": ["oswald i'm done", "ozwell i'm not done", 'ozwell is fun', "oh swell i'm done"],
+    'go-ozwell': ['go oswald', 'no ozwell', 'so ozwell', 'show ozwell', 'go amal', 'go call', 'gauze well', 'go with the flow'],
+    'ozwell-go': ['oswald go', 'ozwell no', 'ozwell show', 'ozwell dont', 'ozwell knows', 'is it slow', 'was mellow', "oh we'll know", "'cause we'll know"]
+}
+
+
 class DataPreparer:
     """Prepares training data for wake-word detection models"""
-    
-    WAKE_PHRASES = {
-        'hey-ozwell': ['hey ozwell', 'hey oswell', 'hay ozwell'],
-        "ozwell-i'm-done": ['ozwell im done', 'ozwell i am done', 'oswell im done', 'ozwell done'],
-        'go-ozwell': ['go ozwell', 'go oswell'],
-        'ozwell-go': ['ozwell go', 'oswell go']
-    }
-
-    NEGATIVE_PHRASES = {
-        'hey-ozwell': ['hey oswald', 'hey amal', 'hey paul', 'nay ozwell', 'he is well'],
-        "ozwell-i'm-done": ["oswald i'm done", "ozwell i'm not done", 'ozwell is fun', "oh swell i'm done"],
-        'go-ozwell': ['go oswald', 'no ozwell', 'so ozwell', 'show ozwell', 'go amal', 'go call', 'gauze well', 'go with the flow'],
-        'ozwell-go': ['oswald go', 'ozwell no', 'ozwell show', 'ozwell dont', 'ozwell knows', 'is it slow', 'was mellow', "oh we'll know", "'cause we'll know"]
-    }
-    
-    def __init__(self, data_dir: str = '../data', wake_phrases_csv: str | None = None, negative_phrases_csv: str | None = None, sample_rate: int = 16000):
+    def __init__(self, phrase: str, negative_phrases: list, data_dir: str = '../data', sample_rate: int = 16000):
+        self.phrase = phrase.lower()
         self.data_dir = Path(data_dir)
         self.sample_rate = sample_rate
+        self.phrase_dir = self.data_dir / self.phrase.replace(' ','-')
+        self.negative_phrases = negative_phrases
         
         # Create directory structure
-        for phrase in self.WAKE_PHRASES.keys():
-            phrase_dir = self.data_dir / phrase
-            for split in ['train/positive', 'train/negative', 'test/positive', 'test/negative']:
-                (phrase_dir / split).mkdir(parents=True, exist_ok=True)
-
-        # If passed a path to a csv file, add the positive variants to WAKE_PHRASES
-        if wake_phrases_csv:
-            df = pd.read_csv(wake_phrases_csv)
-            for group_name, group in df.groupby('wake_phrase'):
-                key = group_name.replace(' ', '-')
-                positive_phrases = self.WAKE_PHRASES.get(key, [])
-                positive_phrases.extend(group['positive_phrase'].to_list())
-                positive_phrases = list(set(positive_phrases))
-                self.WAKE_PHRASES[key] = positive_phrases
-
-        # If passed a path to a csv file, add the negative pharse to NEGATIVE_PHRASES
-        if negative_phrases_csv:
-            df = pd.read_csv(negative_phrases_csv)
-            for group_name, group in df.groupby('wake_phrase'):
-                key = group_name.replace(' ', '-')
-                negative_phrases = self.NEGATIVE_PHRASES.get(key, [])
-                negative_phrases.extend(group['negative_phrase'].to_list())
-                negative_phrases = list(set(negative_phrases))
-                self.NEGATIVE_PHRASES[key] = negative_phrases
+        for split in ['train/positive', 'train/negative', 'test/positive', 'test/negative']:
+            (self.phrase_dir / split).mkdir(parents=True, exist_ok=True)
 
         # Initialize ElevenLabs client
         self.client = ElevenLabs(api_key=os.getenv("ELEVEN_API_KEY"))
         voices_response = self.client.voices.get_all()
         self.voices = voices_response.voices
+        self.manifest = self.get_manifest()
     
 
-    def collect_samples(self, phrase: str, samples: dict, reset_idx: bool = False):
+    def collect_samples(self, split: str, sample_type: str, samples: int, reset_idx: bool = False):
         """
         Collect training samples for a specific phrase
         
         Args:
-            phrase: Target wake phrase
-            samples: Dictionary where keys are a Tuple (split, sample_type) and values are the number of samples to generate
+            split: which split to collect samples for (['train', 'test'])
+            sample_type: which sample_type to generate samples for (['positive', 'negative'])
+            samples: number of samples to generate
             reset_idx: if True will begin naming files starting from 1 after the maximum existing idx, otherwise starts from 0
         """
 
         # assert samples.keys()
-        logger.info(f"Collecting samples for phrase: {phrase}")
-        if phrase not in self.WAKE_PHRASES:
-            raise ValueError(f"Unknown phrase: {phrase}")
-                
-        phrase_dir = self.data_dir / phrase
-        manifest = self.get_manifest(phrase)
+        logger.info(f"Collecting {sample_type} samples for split: {split}")
+        assert split in ['train', 'test']
+        assert sample_type in ['positive', 'negative']
+        
+        logger.info(f"Generating {samples} samples...")
+        start_idx = 0 if (reset_idx or (len(self.manifest[split][f'{sample_type}_samples']) == 0)) else pd.DataFrame((self.manifest[split][f'{sample_type}_samples']))['file'].map(lambda x: int(re.match(r'(\d+)_.*\.wav', x)[1])).max() + 1
+        text = self.phrase.replace('-', ' ')
+        label = int(sample_type == 'positive')
+        for i in range(start_idx, start_idx + samples):
+            if sample_type == 'negative':
+                text = random.choice(self.negative_phrases)
+            voice = random.choice(self.voices)
+            filename = f'{i:04d}_{re.sub(r' +', '_', re.sub(r' - .*', '', voice.name)).strip('_')}.wav'
 
-        for (split, sample_type), num_samples in samples.items():
-            label = int(sample_type == "positive")
-            logger.info(f"Generating {num_samples} {sample_type} samples ({split})...")
-            start_idx = 0 if (reset_idx or (len(os.listdir(phrase_dir / split / sample_type)) == 0)) else max(list(map(lambda x: int(re.match(r'(\d+)_.*\.wav', x)[1]), os.listdir(phrase_dir / split / sample_type)))) + 1
-            for i in range(start_idx, start_idx + num_samples):
-                try:
-                    selected_phrase = self.select_phrase(phrase, label==1)
-                    voice = random.choice(self.voices)
-                    audio = self.client.text_to_speech.convert(
-                        voice_id=voice.voice_id,
-                        model_id="eleven_multilingual_v2",
-                        text=selected_phrase
-                    )
-                    filename = phrase_dir / split / sample_type / f'{i:04d}_{re.sub(r' +', '_', re.sub(r' - .*', '', voice.name)).strip('_')}.wav'
-                    # save audio to file
-                    with open(filename, "wb") as f:
-                        for chunk in audio:
-                            if chunk:
-                                f.write(chunk)
-                    manifest[split][f"{sample_type}_samples"].append({"file": str(filename), "label": label, "phrase": selected_phrase, "augmented": None, "voice": voice.name})
-                except:
-                    logger.error(f'Problem rose during generation of {filename} ({split})...saving manifest')
-                    self.save_manifest(phrase, manifest)
-                    return
+            try:
+                audio = self.client.text_to_speech.convert(
+                    voice_id=voice.voice_id,
+                    model_id="eleven_multilingual_v2",
+                    text=text
+                )
 
-        self.save_manifest(phrase, manifest)
-        logger.info(f"Data collection complete for {phrase}")
+                # save audio to file
+                with open(self.phrase_dir / split / sample_type / filename, "wb") as f:
+                    for chunk in audio:
+                        if chunk:
+                            f.write(chunk)
+            except:
+                logger.error(f'Problem occured during {sample_type} sample collection for split {split}')
+                logger.error(f'Issue arose during generation of sample: {filename}')
+                logger.error('Saving manifest...')
+                self.save_manifest()
+                logger.error('Manifest saved!')
+                return
+            self.manifest[split][f"{sample_type}_samples"].append({"file": filename, "label": label, "text": text, "voice": voice.name})
+        self.save_manifest()
+        logger.info(f"Done collecting {sample_type} samples for {split} split")
 
     
-    def augment_data(self, phrase: str, augmentation_factor: int = 3):
+    def augment_data(self, split: str, sample_type: str, augmentation_factor: int = 3):
         """
         Apply data augmentation to existing samples
         
         Args:
-            phrase: Target phrase to augment
+            split: which split to augment samples for (['train', 'test'])
+            sample_type: which sample_type to augment samples for (['positive', 'negative'])
             augmentation_factor: How many augmented versions to create per original
         """
-        logger.info(f"Augmenting data for phrase: {phrase}")
+        logger.info(f"Augmenting {sample_type} data for split: {split}")
                 
-        manifest = self.get_manifest(phrase)
 
-        for split in ['train', 'test']:
-            for sample_type in ['positive', 'negative']:
-                df = pd.DataFrame(manifest[split][f'{sample_type}_samples'])
-                if df.empty:
-                    continue
-                orig = df[df['augmented'].isnull()]
-                orig['existing_augs'] = orig['file'].map(lambda x: (df['augmented'] == x).sum())
-                orig = orig[orig['existing_augs'].lt(augmentation_factor)]
-                if orig.empty:
-                    continue
-                audio = orig['file'].map(lambda x: librosa.load(Path(x), sr=self.sample_rate)[0])
-                audio.name = 'audio'
-                for aug_id in range(min(orig['existing_augs']), augmentation_factor):
-                    try:
-                        filter = orig['existing_augs'].le(aug_id)
-                        if not filter.any():
-                            continue
-                        aug_audio = audio.loc[filter].map(self._apply_augmentation)
-                        aug_df = orig[filter].drop(columns=['existing_augs']).copy()
-                        aug_df['augmented'] = aug_df['file']
-                        aug_df['file'] = aug_df['file'].str.replace('.wav', f'_aug_{aug_id}.wav')
-
-                        # Save augmented audio
-                        pd.concat((aug_df['file'], aug_audio), axis=1).apply(lambda row: sf.write(row['file'], row['audio'], self.sample_rate), axis=1)
-                        manifest[split][f'{sample_type}_samples'].extend(aug_df.to_dict(orient='records'))
-                    except:
-                        logger.error(f'Problem augmeting {aug_id/augmentation_factor} {sample_type} samples for {split}...saving_manifest')
-                        self.save_manifest(phrase, manifest)
-        self.save_manifest(phrase, manifest)
+        df = pd.DataFrame(self.manifest[split][f'{sample_type}_samples'])
+        if df.empty:
+            logger.info(f"No {sample_type} samples to augment for split: {split}.")
+            return
+        orig = df[~df['file'].str.contains('_aug_')]
+        orig['existing_augs'] = orig['file'].map(lambda x: (df['file'].str.contains(x.replace('.wav', '_aug_'))).sum())
+        orig = orig[orig['existing_augs'].lt(augmentation_factor)]
+        if orig.empty:
+            return
+        audio = orig['file'].map(lambda x: librosa.load(self.phrase_dir / split / sample_type / x, sr=self.sample_rate)[0])
+        audio.name = 'audio'
+        for aug_id in range(min(orig['existing_augs']), augmentation_factor):
+            filter = orig['existing_augs'].le(aug_id)
+            if not filter.any():
+                continue
+            aug_df = orig[filter].drop(columns=['existing_augs']).copy()
+            aug_df['file'] = aug_df['file'].str.replace('.wav', f'_aug_{aug_id}.wav')
+            try:
+                # Apply augmentation
+                aug_df['audio'] = audio.loc[filter].map(self._apply_augmentation)
+                # Save augmented audio
+                aug_df.apply(lambda row: sf.write(self.phrase_dir / split / sample_type / row['file'], row['audio'], self.sample_rate), axis=1)
+            except:
+                logger.error(f'Problem augmeting {aug_id/augmentation_factor} {sample_type} samples for {split}...saving_manifest')
+                self.save_manifest()
+            self.manifest[split][f'{sample_type}_samples'].extend(aug_df.drop(columns=['audio']).to_dict(orient='records'))
+        self.save_manifest()
         logger.info(f"Augmentation complete.")
     
     def _apply_augmentation(self, audio: np.ndarray) -> np.ndarray:
@@ -193,23 +176,23 @@ class DataPreparer:
         
         return audio.astype(np.float32)
     
-    def get_sample_counts(self, phrase: str):
-        manifest = self.get_manifest(phrase)
-        counts = {}
-        for split in  ['train', 'test'] :
-            for sample_type in ['positive', 'negative']:
-                df = pd.DataFrame(manifest[split][f'{sample_type}_samples'])
-                counts[(split, sample_type, 'orig')] = len(df[df['augmented'].isnull()])  if len(df) > 0 else 0
-                counts[(split, sample_type, 'aug')] = len(df[~df['augmented'].isnull()]) if len(df) > 0 else 0
-        return counts
+    def get_count(self, split: str, sample_type: str, key: str = 'total'):
+
+        df = pd.DataFrame(self.manifest[split][f'{sample_type}_samples'])
+        if key == 'total':
+            return len(df)
+        if key == 'orig':
+            return  (~df['file'].str.contains('_aug_')).sum() if len(df) > 0 else 0
+        if key == 'aug':
+            return (df['file'].str.contains('_aug_')).sum() if len(df) > 0 else 0
     
-    def get_manifest(self, phrase_key: str):
+    def get_manifest(self):
         """
         Get training manifest for a specific phrase
 
         phrase_key: phrase to get manifest for
         """
-        manifest_path = self.data_dir / phrase_key / "training_manifest.json"
+        manifest_path = self.phrase_dir / "training_manifest.json"
         if os.path.exists(manifest_path):
             with open(manifest_path, 'r') as file:
                 manifest = json.load(file)
@@ -217,22 +200,16 @@ class DataPreparer:
             manifest = {'train': {'positive_samples': [], 'negative_samples': []}, 'test': {'positive_samples': [], 'negative_samples': []}}
         return manifest
     
-    def save_manifest(self, phrase_key: str, manifest: dict):
+    def save_manifest(self):
         """
         Save training manifest for a specific phrase
 
         phrase_key: phrase to save manifest to
         """
-        manifest_path = self.data_dir / phrase_key / "training_manifest.json"
+        manifest_path = self.phrase_dir / "training_manifest.json"
         with open(manifest_path, 'w') as file:
-            json.dump(manifest, file, indent=4, ignore_nan=True)
+            json.dump(self.manifest, file, indent=4, ignore_nan=True)
     
-    def select_phrase(self, phrase_key: str, positive: bool):
-        if positive:
-            return phrase_key.replace('-', ' ')
-        else:
-            return random.choice(self.NEGATIVE_PHRASES[phrase_key])
-
 
 def main():
     parser = argparse.ArgumentParser(description='Prepare training data for Hey Ozwell wake-word models')
@@ -252,39 +229,51 @@ def main():
     
     
     args = parser.parse_args()
+    assert args.test_split_factor >= 0.0 and args.test_split_factor <= 1.0, logger.error('Test split factor must be in range 0.0 and 1.0')
+
 
     os.makedirs('../logs/data_prep', exist_ok=True)
     handler = logging.FileHandler(f'../logs/data_prep/{args.phrase}.log', 'w')
     logger.addHandler(handler)
     
-    # Initialize data preparer
-    preparer = DataPreparer(data_dir=args.data_dir, negative_phrases_csv='../negative_phrases.csv')
-    existing_sample_counts = preparer.get_sample_counts(args.phrase)
+    df = pd.read_csv('../negative_phrases.csv')
+    negative_phrases = list(set(df['negative_phrase'][df['wake_phrase'].str.replace(' ', '-') == args.phrase].to_list() + NEGATIVE_PHRASES[args.phrase]))
 
-    assert args.test_split_factor >= 0.0 and args.test_split_factor <= 1.0, logger.error('Test split factor must be in range 0.0 and 1.0')
-    generate_samples = {}
+    # Initialize data preparer
+    preparer = DataPreparer(phrase=args.phrase, data_dir=args.data_dir, negative_phrases=negative_phrases)
     for split in ['train', 'test']:
         split_factor = (1.0 - args.test_split_factor) if split == 'train' else args.test_split_factor
+        logger.info(f'Preparing data for {split} split...')
         for sample_type in ['positive', 'negative']:
-            num_samples = args.positive_samples if (sample_type == 'positive') else args.negative_samples
-            generate_samples[split, sample_type] = max(0, round(num_samples * split_factor) - existing_sample_counts[split, sample_type, 'orig'])
+            target_sample_count = round(args.positive_samples * split_factor) if (sample_type == 'positive') else round(args.negative_samples * split_factor)
+            existing_sample_count = preparer.get_count(split, sample_type, 'orig')
+            samples = max(0, target_sample_count = existing_sample_count)
+            logger.info(f'{existing_sample_count} existing {sample_type} samples for {split} split')
+            logger.info(f'{samples} samples needed to reach target of {target_sample_count}')
+            # Collect samples
+            preparer.collect_samples(
+                split=split,
+                sample_type=sample_type,
+                samples=samples,
+                reset_idx=False
+            )
+            
+            # Augment samples
+            if args.augment:
+                existing_aug_count = preparer.get_count(split, sample_type, 'aug')
+                preparer.augment_data(split, sample_type, args.augment_factor)
+                logger.info(f'{existing_aug_count - preparer.get_count(split, sample_type, 'aug')} augmented {sample_type} samples created for {split} split')
 
-    # Collect samples
-    preparer.collect_samples(
-        phrase=args.phrase,
-        samples=generate_samples,
-        reset_idx=False
-    )
-    
-    # Apply augmentation if requested
-    if args.augment:
-        preparer.augment_data(args.phrase, args.augment_factor)
     
     logger.info("Data preparation complete!")
-    logger.info(f"File counts: {preparer.get_sample_counts(args.phrase)}")
+    logger.info("File counts:")
+    logger.info(f"\ttrain:")
+    logger.info(f"\t\tpositive: total={preparer.get_count('train', 'positive', 'total')} (orig={preparer.get_count('train', 'positive', 'orig')}, aug={preparer.get_count('train', 'positive', 'aug')})")
+    logger.info(f"\t\tnegative: total={preparer.get_count('train', 'negative', 'total')} (orig={preparer.get_count('train', 'negative', 'orig')}, aug={preparer.get_count('train', 'negative', 'aug')})")
+    logger.info(f"\ttest:")
+    logger.info(f"\t\tpositive: total={preparer.get_count('test', 'positive', 'total')} (orig={preparer.get_count('test', 'positive', 'orig')}, aug={preparer.get_count('test', 'positive', 'aug')})")
+    logger.info(f"\t\tnegative: total={preparer.get_count('test', 'negative', 'total')} (orig={preparer.get_count('test', 'negative', 'orig')}, aug={preparer.get_count('test', 'negative', 'aug')})")
 
 
 if __name__ == '__main__':
     main()
-    
-

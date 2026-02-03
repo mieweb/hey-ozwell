@@ -87,7 +87,7 @@ def evaluate_model_for_phrase(phrase):
     logger.info(f"Evaluating model for phrase: {phrase}")
     
     model_path = f"../exports/{phrase}.onnx"
-    test_data_path = f"../data/{phrase}/test"
+    test_data_path = f"../data/{phrase}"
     
     cmd = [
         'python', 'evaluate.py',

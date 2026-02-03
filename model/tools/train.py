@@ -32,23 +32,15 @@ logger = logging.getLogger(__name__)
 class AudioDataset(Dataset):
     """Dataset for audio wake-word detection"""
     
-    def __init__(self, manifest_file: str, data_dir: str, sample_rate: int = 16000, 
+    def __init__(self, samples: list, data_dir: str, sample_rate: int = 16000, 
                  max_duration: float = 3.0, n_mels: int = 80):
         self.data_dir = Path(data_dir)
         self.sample_rate = sample_rate
         self.max_duration = max_duration
         self.max_samples = int(max_duration * sample_rate)
         self.n_mels = n_mels
-        
-        # Load manifest
-        with open(manifest_file, 'r') as f:
-            self.manifest = json.load(f)
-        
-        # Combine positive and negative samples
-        self.samples = pd.DataFrame(self.manifest['train']['positive_samples'] + self.manifest['train']['negative_samples']).get(['file', 'label']).to_records(index=False)        
-
-        logger.info(f"Loaded {len(self.samples)} samples from {manifest_file}")
-    
+        self.samples = samples
+            
     def __len__(self):
         return len(self.samples)
     
@@ -317,9 +309,18 @@ def main():
     
     if not manifest_file.exists():
         raise FileNotFoundError(f"Training manifest not found: {manifest_file}")
-    
+    else:
+        # Load manifest
+        with open(manifest_file, 'r') as f:
+            manifest = json.load(f)
+        train_df = pd.DataFrame(manifest['train']['positive_samples'] + manifest['train']['negative_samples']).get('file', 'label')
+        train_df['file'] = train_df.apply(lambda row: os.path.join('train', 'positive', row['file']) if row['label'] == 1 else os.path.join('train', 'negative', row['file']), axis=1)
+        train_samples = train_df.to_records(index=False)
+        logger.info(f"Loaded {len(train_samples)} samples from {manifest_file}")
+
+
     # Create datasets
-    dataset = AudioDataset(manifest_file, args.data_dir, n_mels=args.n_mels)
+    dataset = AudioDataset(train_samples, args.data_dir, n_mels=args.n_mels)
     
     # Split into train/validation
     train_size = int(0.8 * len(dataset))

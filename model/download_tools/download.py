@@ -10,13 +10,13 @@ logger = logging.getLogger(__name__)
 
 def main():
     cmd = [
-        'python', 'download_drive_data.py.py',
-        '--data-dir', './data',
+        'python', 'download_drive_data.py',
+        '--data-dir', '../data',
         '--delete-after-extract'
     ]
     try:
         logger.info(f"Running: {' '.join(cmd)}")
-        result = subprocess.run(cmd, cwd='../', check=True, capture_output=True, text=True)
+        result = subprocess.run(cmd, cwd='./', check=True, capture_output=True, text=True)
         logger.info("Command completed successfully")
     except subprocess.CalledProcessError as e:
         logger.error(f"Command failed: {e}")
@@ -26,14 +26,14 @@ def main():
     cmd = [
         'python', 'download_eleven_labs.py',
         '--batch-size', '100',
-        '--negative-phrase-csv', './negative_phrases.csv',
-        '--data-dir', './data',
-        '--split-factor', '.8',
+        '--negative-phrase-csv', '../negative_phrases.csv',
+        '--data-dir', '../data',
+        '--split-factor', '.5',
         '--delete-after-extract'
     ]
     try:
         logger.info(f"Running: {' '.join(cmd)}")
-        result = subprocess.run(cmd, cwd='../', check=True, capture_output=True, text=True)
+        result = subprocess.run(cmd, cwd='./', check=True, capture_output=True, text=True)
         logger.info("Command completed successfully")
     except subprocess.CalledProcessError as e:
         logger.error(f"Command failed: {e}")
@@ -41,7 +41,3 @@ def main():
 
 if __name__=='__main__':
     main()
-    
-    
-
-        

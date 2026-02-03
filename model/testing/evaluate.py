@@ -90,11 +90,9 @@ class ModelEvaluator:
         else:
             return prediction, inference_time
     
-    def evaluate_test_set(self, manifest: dict, phrase: str) -> Dict:
+    def evaluate_test_set(self, df: pd.DataFrame, phrase: str) -> Dict:
         """Evaluate model on test dataset"""
         
-    
-        df = pd.DataFrame(manifest['test']['positive_samples'] + manifest['test']['negative_samples'])
         true_labels = df['label'].to_list()
         pred_tuple = df['file'].map(self.preprocess_audio).map(self.predict)
         predictions, confidences, inference_times = pred_tuple.str[0].to_list(), pred_tuple.str[1].to_list(), pred_tuple.str[2].to_list()
@@ -133,12 +131,10 @@ class ModelEvaluator:
         
         return results
     
-    def test_false_positive_rate(self, manifest: dict, duration_hours: float = 1.0) -> float:
+    def test_false_positive_rate(self, audio_files: list, duration_hours: float = 1.0) -> float:
         """Test false positive rate over extended audio"""
         logger.info(f"Testing false positive rate over {duration_hours} hours of audio")
-        
-        audio_files = pd.DataFrame(manifest['test']['negative_samples'])['file'].to_list()
-        
+                
         if not audio_files:
             logger.warning("No negative audio files found")
             return 0.0
@@ -280,9 +276,11 @@ def main():
     test_dir = Path(args.test_data)
     with open(test_dir.parent / 'training_manifest.json', 'r') as f:
         manifest = json.load(f)
-    
+    test_df = pd.DataFrame(manifest['test']['positive_samples'] + manifest['test']['negative_samples']).get(['file', 'label'])
+    test_df['file'] = test_df.apply(lambda row: os.path.join(args.test_dir, 'test', 'positive', row['file']) if row['label'] == 1 else os.path.join(args.test_dir, 'test', 'negative', row['file']), axis=1)
+
     # Run main evaluation
-    results = evaluator.evaluate_test_set(manifest, args.phrase)
+    results = evaluator.evaluate_test_set(test_df, args.phrase)
     
     # Print results
     logger.info("Evaluation Results:")
@@ -295,7 +293,7 @@ def main():
     
     # Run extended false positive test if requested
     if args.fp_test:
-        fp_rate = evaluator.test_false_positive_rate(manifest, args.fp_duration)
+        fp_rate = evaluator.test_false_positive_rate(test_df[test_df['label'] == 0]['file'].to_list(), args.fp_duration)
         results['extended_fp_rate_per_hour'] = fp_rate
     
     # Generate report
