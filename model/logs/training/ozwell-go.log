@@ -1,0 +1,334 @@
+Using CPU for training
+Loaded 4188 samples from ../data/ozwell-go/training_manifest.json
+Model created with 3731010 parameters
+Starting training...
+Batch 0/105, Loss: 0.6969
+Batch 50/105, Loss: 0.6504
+Batch 100/105, Loss: 0.7356
+Epoch 1/50:
+  Train Loss: 0.7423
+  Val Loss: 0.6799, Val Accuracy: 0.5668
+  New best model saved to ../exports/ozwell-go.pth
+Batch 0/105, Loss: 0.6413
+Batch 50/105, Loss: 0.7099
+Batch 100/105, Loss: 0.7318
+Epoch 2/50:
+  Train Loss: 0.6822
+  Val Loss: 0.6194, Val Accuracy: 0.7387
+  New best model saved to ../exports/ozwell-go.pth
+Batch 0/105, Loss: 0.7063
+Batch 50/105, Loss: 0.6377
+Batch 100/105, Loss: 0.5959
+Epoch 3/50:
+  Train Loss: 0.6198
+  Val Loss: 0.5276, Val Accuracy: 0.7578
+  New best model saved to ../exports/ozwell-go.pth
+Batch 0/105, Loss: 0.5955
+Batch 50/105, Loss: 0.4705
+Batch 100/105, Loss: 0.5433
+Epoch 4/50:
+  Train Loss: 0.5560
+  Val Loss: 0.4270, Val Accuracy: 0.8222
+  New best model saved to ../exports/ozwell-go.pth
+Batch 0/105, Loss: 0.4742
+Batch 50/105, Loss: 0.5930
+Batch 100/105, Loss: 0.5597
+Epoch 5/50:
+  Train Loss: 0.4925
+  Val Loss: 0.4119, Val Accuracy: 0.8222
+  New best model saved to ../exports/ozwell-go.pth
+Batch 0/105, Loss: 0.5037
+Batch 50/105, Loss: 0.7217
+Batch 100/105, Loss: 0.3348
+Epoch 6/50:
+  Train Loss: 0.4441
+  Val Loss: 0.3641, Val Accuracy: 0.8437
+  New best model saved to ../exports/ozwell-go.pth
+Batch 0/105, Loss: 0.5260
+Batch 50/105, Loss: 0.3337
+Batch 100/105, Loss: 0.4217
+Epoch 7/50:
+  Train Loss: 0.3990
+  Val Loss: 0.3095, Val Accuracy: 0.8771
+  New best model saved to ../exports/ozwell-go.pth
+Batch 0/105, Loss: 0.3873
+Batch 50/105, Loss: 0.4178
+Batch 100/105, Loss: 0.6319
+Epoch 8/50:
+  Train Loss: 0.3632
+  Val Loss: 0.2773, Val Accuracy: 0.8938
+  New best model saved to ../exports/ozwell-go.pth
+Batch 0/105, Loss: 0.2376
+Batch 50/105, Loss: 0.3762
+Batch 100/105, Loss: 0.3898
+Epoch 9/50:
+  Train Loss: 0.3258
+  Val Loss: 0.2513, Val Accuracy: 0.8962
+  New best model saved to ../exports/ozwell-go.pth
+Batch 0/105, Loss: 0.2421
+Batch 50/105, Loss: 0.1629
+Batch 100/105, Loss: 0.3087
+Epoch 10/50:
+  Train Loss: 0.3005
+  Val Loss: 0.2893, Val Accuracy: 0.8771
+Batch 0/105, Loss: 0.4662
+Batch 50/105, Loss: 0.2767
+Batch 100/105, Loss: 0.3676
+Epoch 11/50:
+  Train Loss: 0.3078
+  Val Loss: 0.2380, Val Accuracy: 0.9093
+  New best model saved to ../exports/ozwell-go.pth
+Batch 0/105, Loss: 0.4640
+Batch 50/105, Loss: 0.1885
+Batch 100/105, Loss: 0.1761
+Epoch 12/50:
+  Train Loss: 0.2696
+  Val Loss: 0.2050, Val Accuracy: 0.9069
+  New best model saved to ../exports/ozwell-go.pth
+Batch 0/105, Loss: 0.2259
+Batch 50/105, Loss: 0.4836
+Batch 100/105, Loss: 0.2516
+Epoch 13/50:
+  Train Loss: 0.2469
+  Val Loss: 0.2319, Val Accuracy: 0.8926
+Batch 0/105, Loss: 0.2001
+Batch 50/105, Loss: 0.2460
+Batch 100/105, Loss: 0.2645
+Epoch 14/50:
+  Train Loss: 0.2412
+  Val Loss: 0.2003, Val Accuracy: 0.9105
+  New best model saved to ../exports/ozwell-go.pth
+Batch 0/105, Loss: 0.0832
+Batch 50/105, Loss: 0.2037
+Batch 100/105, Loss: 0.1028
+Epoch 15/50:
+  Train Loss: 0.2089
+  Val Loss: 0.1850, Val Accuracy: 0.9236
+  New best model saved to ../exports/ozwell-go.pth
+Batch 0/105, Loss: 0.1708
+Batch 50/105, Loss: 0.1228
+Batch 100/105, Loss: 0.2459
+Epoch 16/50:
+  Train Loss: 0.2012
+  Val Loss: 0.1675, Val Accuracy: 0.9236
+  New best model saved to ../exports/ozwell-go.pth
+Batch 0/105, Loss: 0.0716
+Batch 50/105, Loss: 0.2474
+Batch 100/105, Loss: 0.2111
+Epoch 17/50:
+  Train Loss: 0.1946
+  Val Loss: 0.1667, Val Accuracy: 0.9189
+  New best model saved to ../exports/ozwell-go.pth
+Batch 0/105, Loss: 0.2916
+Batch 50/105, Loss: 0.1679
+Batch 100/105, Loss: 0.3016
+Epoch 18/50:
+  Train Loss: 0.1853
+  Val Loss: 0.1941, Val Accuracy: 0.9093
+Batch 0/105, Loss: 0.1598
+Batch 50/105, Loss: 0.2330
+Batch 100/105, Loss: 0.1564
+Epoch 19/50:
+  Train Loss: 0.1782
+  Val Loss: 0.1666, Val Accuracy: 0.9248
+  New best model saved to ../exports/ozwell-go.pth
+Batch 0/105, Loss: 0.1148
+Batch 50/105, Loss: 0.1113
+Batch 100/105, Loss: 0.1761
+Epoch 20/50:
+  Train Loss: 0.1639
+  Val Loss: 0.1491, Val Accuracy: 0.9391
+  New best model saved to ../exports/ozwell-go.pth
+Batch 0/105, Loss: 0.0681
+Batch 50/105, Loss: 0.0480
+Batch 100/105, Loss: 0.2549
+Epoch 21/50:
+  Train Loss: 0.1496
+  Val Loss: 0.1765, Val Accuracy: 0.9189
+Batch 0/105, Loss: 0.1874
+Batch 50/105, Loss: 0.1397
+Batch 100/105, Loss: 0.1222
+Epoch 22/50:
+  Train Loss: 0.1552
+  Val Loss: 0.1469, Val Accuracy: 0.9308
+  New best model saved to ../exports/ozwell-go.pth
+Batch 0/105, Loss: 0.0309
+Batch 50/105, Loss: 0.0873
+Batch 100/105, Loss: 0.0963
+Epoch 23/50:
+  Train Loss: 0.1394
+  Val Loss: 0.1545, Val Accuracy: 0.9284
+Batch 0/105, Loss: 0.0045
+Batch 50/105, Loss: 0.0805
+Batch 100/105, Loss: 0.2003
+Epoch 24/50:
+  Train Loss: 0.1385
+  Val Loss: 0.1175, Val Accuracy: 0.9487
+  New best model saved to ../exports/ozwell-go.pth
+Batch 0/105, Loss: 0.2757
+Batch 50/105, Loss: 0.0307
+Batch 100/105, Loss: 0.2080
+Epoch 25/50:
+  Train Loss: 0.1397
+  Val Loss: 0.1471, Val Accuracy: 0.9272
+Batch 0/105, Loss: 0.0422
+Batch 50/105, Loss: 0.1177
+Batch 100/105, Loss: 0.1103
+Epoch 26/50:
+  Train Loss: 0.1188
+  Val Loss: 0.1081, Val Accuracy: 0.9558
+  New best model saved to ../exports/ozwell-go.pth
+Batch 0/105, Loss: 0.1413
+Batch 50/105, Loss: 0.0426
+Batch 100/105, Loss: 0.0903
+Epoch 27/50:
+  Train Loss: 0.1204
+  Val Loss: 0.1209, Val Accuracy: 0.9451
+Batch 0/105, Loss: 0.0922
+Batch 50/105, Loss: 0.0754
+Batch 100/105, Loss: 0.1340
+Epoch 28/50:
+  Train Loss: 0.0997
+  Val Loss: 0.0937, Val Accuracy: 0.9594
+  New best model saved to ../exports/ozwell-go.pth
+Batch 0/105, Loss: 0.1514
+Batch 50/105, Loss: 0.2175
+Batch 100/105, Loss: 0.0881
+Epoch 29/50:
+  Train Loss: 0.1233
+  Val Loss: 0.0999, Val Accuracy: 0.9618
+Batch 0/105, Loss: 0.0485
+Batch 50/105, Loss: 0.1619
+Batch 100/105, Loss: 0.0221
+Epoch 30/50:
+  Train Loss: 0.1129
+  Val Loss: 0.1371, Val Accuracy: 0.9439
+Batch 0/105, Loss: 0.1676
+Batch 50/105, Loss: 0.2151
+Batch 100/105, Loss: 0.0095
+Epoch 31/50:
+  Train Loss: 0.1070
+  Val Loss: 0.1159, Val Accuracy: 0.9499
+Batch 0/105, Loss: 0.1449
+Batch 50/105, Loss: 0.0318
+Batch 100/105, Loss: 0.0824
+Epoch 32/50:
+  Train Loss: 0.1145
+  Val Loss: 0.1011, Val Accuracy: 0.9535
+Batch 0/105, Loss: 0.0574
+Batch 50/105, Loss: 0.0480
+Batch 100/105, Loss: 0.0491
+Epoch 33/50:
+  Train Loss: 0.1044
+  Val Loss: 0.0873, Val Accuracy: 0.9570
+  New best model saved to ../exports/ozwell-go.pth
+Batch 0/105, Loss: 0.0703
+Batch 50/105, Loss: 0.1947
+Batch 100/105, Loss: 0.0738
+Epoch 34/50:
+  Train Loss: 0.1062
+  Val Loss: 0.1429, Val Accuracy: 0.9368
+Batch 0/105, Loss: 0.1252
+Batch 50/105, Loss: 0.0557
+Batch 100/105, Loss: 0.0802
+Epoch 35/50:
+  Train Loss: 0.0905
+  Val Loss: 0.0830, Val Accuracy: 0.9654
+  New best model saved to ../exports/ozwell-go.pth
+Batch 0/105, Loss: 0.1153
+Batch 50/105, Loss: 0.1017
+Batch 100/105, Loss: 0.1117
+Epoch 36/50:
+  Train Loss: 0.0871
+  Val Loss: 0.1020, Val Accuracy: 0.9582
+Batch 0/105, Loss: 0.0305
+Batch 50/105, Loss: 0.0274
+Batch 100/105, Loss: 0.0475
+Epoch 37/50:
+  Train Loss: 0.0754
+  Val Loss: 0.0834, Val Accuracy: 0.9606
+Batch 0/105, Loss: 0.0360
+Batch 50/105, Loss: 0.0789
+Batch 100/105, Loss: 0.0407
+Epoch 38/50:
+  Train Loss: 0.0954
+  Val Loss: 0.0927, Val Accuracy: 0.9606
+Batch 0/105, Loss: 0.0760
+Batch 50/105, Loss: 0.2058
+Batch 100/105, Loss: 0.0037
+Epoch 39/50:
+  Train Loss: 0.0840
+  Val Loss: 0.0891, Val Accuracy: 0.9666
+Batch 0/105, Loss: 0.1240
+Batch 50/105, Loss: 0.1834
+Batch 100/105, Loss: 0.1389
+Epoch 40/50:
+  Train Loss: 0.0920
+  Val Loss: 0.0780, Val Accuracy: 0.9678
+  New best model saved to ../exports/ozwell-go.pth
+Batch 0/105, Loss: 0.0198
+Batch 50/105, Loss: 0.1226
+Batch 100/105, Loss: 0.0030
+Epoch 41/50:
+  Train Loss: 0.0662
+  Val Loss: 0.0967, Val Accuracy: 0.9654
+Batch 0/105, Loss: 0.2576
+Batch 50/105, Loss: 0.1518
+Batch 100/105, Loss: 0.1533
+Epoch 42/50:
+  Train Loss: 0.0933
+  Val Loss: 0.0825, Val Accuracy: 0.9666
+Batch 0/105, Loss: 0.0137
+Batch 50/105, Loss: 0.0056
+Batch 100/105, Loss: 0.1171
+Epoch 43/50:
+  Train Loss: 0.0833
+  Val Loss: 0.0831, Val Accuracy: 0.9678
+Batch 0/105, Loss: 0.0141
+Batch 50/105, Loss: 0.0897
+Batch 100/105, Loss: 0.0842
+Epoch 44/50:
+  Train Loss: 0.0735
+  Val Loss: 0.0773, Val Accuracy: 0.9654
+  New best model saved to ../exports/ozwell-go.pth
+Batch 0/105, Loss: 0.0203
+Batch 50/105, Loss: 0.0605
+Batch 100/105, Loss: 0.0577
+Epoch 45/50:
+  Train Loss: 0.0847
+  Val Loss: 0.1037, Val Accuracy: 0.9582
+Batch 0/105, Loss: 0.0403
+Batch 50/105, Loss: 0.0323
+Batch 100/105, Loss: 0.0330
+Epoch 46/50:
+  Train Loss: 0.0706
+  Val Loss: 0.0928, Val Accuracy: 0.9642
+Batch 0/105, Loss: 0.1903
+Batch 50/105, Loss: 0.0282
+Batch 100/105, Loss: 0.1891
+Epoch 47/50:
+  Train Loss: 0.0775
+  Val Loss: 0.0632, Val Accuracy: 0.9714
+  New best model saved to ../exports/ozwell-go.pth
+Batch 0/105, Loss: 0.0903
+Batch 50/105, Loss: 0.0631
+Batch 100/105, Loss: 0.0527
+Epoch 48/50:
+  Train Loss: 0.0668
+  Val Loss: 0.0671, Val Accuracy: 0.9702
+Batch 0/105, Loss: 0.0107
+Batch 50/105, Loss: 0.0004
+Batch 100/105, Loss: 0.1657
+Epoch 49/50:
+  Train Loss: 0.0710
+  Val Loss: 0.1156, Val Accuracy: 0.9558
+Batch 0/105, Loss: 0.0454
+Batch 50/105, Loss: 0.0218
+Batch 100/105, Loss: 0.0240
+Epoch 50/50:
+  Train Loss: 0.0669
+  Val Loss: 0.0712, Val Accuracy: 0.9678
+Model exported to ONNX: ../exports/ozwell-go.onnx
+ONNX model verification passed
+Final validation accuracy: 0.9714
+Training complete!

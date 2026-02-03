@@ -1,0 +1,14 @@
+Loaded ONNX model: ../exports/hey-ozwell.onnx
+Evaluation Results:
+  Accuracy: 0.8892
+  Precision: 0.9205
+  Recall: 0.7525
+  F1 Score: 0.8281
+  False Positive Rate: 0.0357
+  Avg Inference Time: 0.30 ms
+Testing false positive rate over 1.0 hours of audio
+False positive rate: 0.00 per hour
+Total audio processed: 0.21 hours
+Total false positives: 0
+Evaluation report saved to ../results
+Evaluation complete!
