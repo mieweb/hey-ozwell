@@ -5,7 +5,7 @@ Based on the Hey Buddy framework for wake-word detection.
 """
 
 import os
-import json
+import simplejson as json
 import argparse
 import logging
 from pathlib import Path
@@ -22,6 +22,7 @@ from sklearn.metrics import accuracy_score, classification_report
 import onnx
 import onnxruntime
 import pandas as pd 
+import os
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -44,8 +45,8 @@ class AudioDataset(Dataset):
             self.manifest = json.load(f)
         
         # Combine positive and negative samples
-        self.samples = pd.DataFrame(self.manifest['train']['positive_samples'] + self.manifest['train']['positive_samples']).get(columns=['file', 'label']).to
-        
+        self.samples = pd.DataFrame(self.manifest['train']['positive_samples'] + self.manifest['train']['negative_samples']).get(['file', 'label']).to_records(index=False)        
+
         logger.info(f"Loaded {len(self.samples)} samples from {manifest_file}")
     
     def __len__(self):
@@ -296,6 +297,10 @@ def main():
                        help='Number of mel frequency bands')
     
     args = parser.parse_args()
+
+    os.makedirs('../logs/training', exist_ok=True)
+    handler = logging.FileHandler(f'../logs/training/{args.phrase}.log', 'w')
+    logger.addHandler(handler)
     
     # Set device
     if args.device == 'cuda' and torch.cuda.is_available():

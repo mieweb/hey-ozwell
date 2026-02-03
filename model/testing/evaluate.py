@@ -5,7 +5,7 @@ Tests accuracy, false positive rate, and latency metrics.
 """
 
 import os
-import json
+import simplejson as json
 import argparse
 import time
 import logging
@@ -69,7 +69,7 @@ class ModelEvaluator:
         log_mel = (log_mel - log_mel.mean()) / (log_mel.std() + 1e-8)
         
         # Add batch dimension
-        return log_mel.reshape(1, *log_mel.shape).astype(np.float32)
+        return log_mel.reshape(1, 1, *log_mel.shape).astype(np.float32)
     
     def predict(self, features: np.ndarray, return_confidence: bool = True) -> Tuple[int, float]:
         """Run inference on preprocessed features"""
@@ -94,7 +94,7 @@ class ModelEvaluator:
         """Evaluate model on test dataset"""
         
     
-        df = pd.DataFrame(manifest['test'][f'positive_samples'] + manifest['test'][f'negative_samples'])
+        df = pd.DataFrame(manifest['test']['positive_samples'] + manifest['test']['negative_samples'])
         true_labels = df['label'].to_list()
         pred_tuple = df['file'].map(self.preprocess_audio).map(self.predict)
         predictions, confidences, inference_times = pred_tuple.str[0].to_list(), pred_tuple.str[1].to_list(), pred_tuple.str[2].to_list()
@@ -187,7 +187,7 @@ class ModelEvaluator:
                 )
                 log_mel = librosa.power_to_db(mel_spec, ref=np.max)
                 log_mel = (log_mel - log_mel.mean()) / (log_mel.std() + 1e-8)
-                features = log_mel.reshape(1, *log_mel.shape).astype(np.float32)
+                features = log_mel.reshape(1, 1, *log_mel.shape).astype(np.float32)
                 
                 # Get prediction
                 pred, conf, _ = self.predict(features)
@@ -270,12 +270,19 @@ def main():
                        help='Duration in hours for false positive test')
     
     args = parser.parse_args()
+    os.makedirs('../logs/testing', exist_ok=True)
+    handler = logging.FileHandler(f'../logs/testing/{args.phrase}.log', 'w')
+    logger.addHandler(handler)
     
     # Initialize evaluator
     evaluator = ModelEvaluator(args.model)
+
+    test_dir = Path(args.test_data)
+    with open(test_dir.parent / 'training_manifest.json', 'r') as f:
+        manifest = json.load(f)
     
     # Run main evaluation
-    results = evaluator.evaluate_test_set(args.test_data, args.phrase)
+    results = evaluator.evaluate_test_set(manifest, args.phrase)
     
     # Print results
     logger.info("Evaluation Results:")
@@ -288,8 +295,7 @@ def main():
     
     # Run extended false positive test if requested
     if args.fp_test:
-        negative_dir = Path(args.test_data).parent / 'negative'
-        fp_rate = evaluator.test_false_positive_rate(str(negative_dir), args.fp_duration)
+        fp_rate = evaluator.test_false_positive_rate(manifest, args.fp_duration)
         results['extended_fp_rate_per_hour'] = fp_rate
     
     # Generate report

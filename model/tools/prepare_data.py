@@ -50,7 +50,7 @@ class DataPreparer:
         # Create directory structure
         for phrase in self.WAKE_PHRASES.keys():
             phrase_dir = self.data_dir / phrase
-            for split in ['test/positive', 'test/negative', 'test/positive', 'test/negative']:
+            for split in ['train/positive', 'train/negative', 'test/positive', 'test/negative']:
                 (phrase_dir / split).mkdir(parents=True, exist_ok=True)
 
         # If passed a path to a csv file, add the positive variants to WAKE_PHRASES
@@ -98,12 +98,12 @@ class DataPreparer:
         manifest = self.get_manifest(phrase)
 
         for (split, sample_type), num_samples in samples.items():
-            label = 1 if (sample_type == "positive") else 0
+            label = int(sample_type == "positive")
             logger.info(f"Generating {num_samples} {sample_type} samples ({split})...")
             start_idx = 0 if (reset_idx or (len(os.listdir(phrase_dir / split / sample_type)) == 0)) else max(list(map(lambda x: int(re.match(r'(\d+)_.*\.wav', x)[1]), os.listdir(phrase_dir / split / sample_type)))) + 1
             for i in range(start_idx, start_idx + num_samples):
                 try:
-                    selected_phrase = self.select_phrase(phrase, (sample_type == 'positive'))
+                    selected_phrase = self.select_phrase(phrase, label==1)
                     voice = random.choice(self.voices)
                     audio = self.client.text_to_speech.convert(
                         voice_id=voice.voice_id,
@@ -250,13 +250,18 @@ def main():
     parser.add_argument('--data-dir', default='../data',
                        help='Directory to store training data')
     
+    
     args = parser.parse_args()
+
+    os.makedirs('../logs/data_prep', exist_ok=True)
+    handler = logging.FileHandler(f'../logs/data_prep/{args.phrase}.log', 'w')
+    logger.addHandler(handler)
     
     # Initialize data preparer
     preparer = DataPreparer(data_dir=args.data_dir, negative_phrases_csv='../negative_phrases.csv')
     existing_sample_counts = preparer.get_sample_counts(args.phrase)
-    print(f"Counts of existing samples: {existing_sample_counts}")
-    assert args.test_split_factor >= 0.0 and args.test_split_factor <= 1.0
+
+    assert args.test_split_factor >= 0.0 and args.test_split_factor <= 1.0, logger.error('Test split factor must be in range 0.0 and 1.0')
     generate_samples = {}
     for split in ['train', 'test']:
         split_factor = (1.0 - args.test_split_factor) if split == 'train' else args.test_split_factor
@@ -276,8 +281,10 @@ def main():
         preparer.augment_data(args.phrase, args.augment_factor)
     
     logger.info("Data preparation complete!")
+    logger.info(f"File counts: {preparer.get_sample_counts(args.phrase)}")
 
 
 if __name__ == '__main__':
     main()
     
+

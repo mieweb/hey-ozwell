@@ -15,18 +15,25 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 # Wake phrases to train
-WAKE_PHRASES = ['hey-ozwell', 'ozwell-im-done', 'go-ozwell', 'ozwell-go']
+WAKE_PHRASES = ['hey-ozwell', "ozwell-i'm-done", 'go-ozwell', 'ozwell-go']
 
 # Training configuration
+# TRAINING_CONFIG = {
+#     'epochs': 50,
+#     'batch_size': 32,
+#     'learning_rate': 1e-3,
+#     'positive_samples': 500,
+#     'negative_samples': 2000,
+#     'augment_factor': 3
+# }
 TRAINING_CONFIG = {
     'epochs': 50,
     'batch_size': 32,
     'learning_rate': 1e-3,
     'positive_samples': 500,
-    'negative_samples': 2000,
+    'negative_samples': 500,
     'augment_factor': 3
 }
-
 
 def run_command(cmd, cwd=None):
     """Run a shell command and return success status"""
@@ -54,7 +61,7 @@ def prepare_data_for_phrase(phrase):
         '--augment-factor', str(TRAINING_CONFIG['augment_factor'])
     ]
     
-    return run_command(cmd, cwd='tools')
+    return run_command(cmd, cwd='./')
 
 
 def train_model_for_phrase(phrase):
@@ -72,7 +79,7 @@ def train_model_for_phrase(phrase):
         '--learning-rate', str(TRAINING_CONFIG['learning_rate'])
     ]
     
-    return run_command(cmd, cwd='tools')
+    return run_command(cmd, cwd='./')
 
 
 def evaluate_model_for_phrase(phrase):
@@ -80,7 +87,7 @@ def evaluate_model_for_phrase(phrase):
     logger.info(f"Evaluating model for phrase: {phrase}")
     
     model_path = f"../exports/{phrase}.onnx"
-    test_data_path = f"../data/{phrase}"
+    test_data_path = f"../data/{phrase}/test"
     
     cmd = [
         'python', 'evaluate.py',
@@ -90,7 +97,7 @@ def evaluate_model_for_phrase(phrase):
         '--fp-test'
     ]
     
-    return run_command(cmd, cwd='testing')
+    return run_command(cmd, cwd='../testing')
 
 
 def main():
