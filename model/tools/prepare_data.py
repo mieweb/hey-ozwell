@@ -152,30 +152,6 @@ class DataPreparer:
         self.save_manifest()
         logger.info(f"Augmentation complete.")
     
-    def _apply_augmentation(self, audio: np.ndarray) -> np.ndarray:
-        """Apply random augmentation to audio sample"""
-        
-        # Speed/pitch variation
-        if random.random() < 0.7:
-            speed_factor = random.uniform(0.8, 1.2)
-            audio = librosa.effects.time_stretch(audio, rate=speed_factor)
-        
-        # Pitch shifting
-        if random.random() < 0.5:
-            pitch_shift = random.uniform(-2, 2)  # semitones
-            audio = librosa.effects.pitch_shift(audio, sr=self.sample_rate, n_steps=pitch_shift)
-        
-        # Add noise
-        if random.random() < 0.6:
-            noise_level = random.uniform(0.001, 0.01)
-            noise = noise_level * np.random.randn(len(audio))
-            audio = audio + noise
-        
-        # Normalize
-        audio = audio / max(abs(audio.max()), abs(audio.min()), 1e-7)
-        
-        return audio.astype(np.float32)
-    
     def get_count(self, split: str, sample_type: str, key: str = 'total'):
 
         df = pd.DataFrame(self.manifest[split][f'{sample_type}_samples'])
@@ -258,13 +234,16 @@ def main():
                 reset_idx=False
             )
             
-            # Augment samples
-            if args.augment:
-                existing_aug_count = preparer.get_count(split, sample_type, 'aug')
-                preparer.augment_data(split, sample_type, args.augment_factor)
-                logger.info(f'{existing_aug_count - preparer.get_count(split, sample_type, 'aug')} augmented {sample_type} samples created for {split} split')
+    # # Augment samples
+    # if args.augment:
+    #     existing_aug_count = preparer.get_count('train', 'positive', 'aug')
+    #     preparer.augment_data('train', 'positive', args.augment_factor)
+    #     logger.info(f'{existing_aug_count - preparer.get_count('train', 'positive', 'aug')} augmented positive samples created')
 
-    
+    #     existing_aug_count = preparer.get_count('train', 'negative', 'aug')
+    #     preparer.augment_data('train', 'negative', args.augment_factor)
+    #     logger.info(f'{existing_aug_count - preparer.get_count('train','negative', 'aug')} augmented negative samples created')
+     
     logger.info("Data preparation complete!")
     logger.info("File counts:")
     logger.info(f"\ttrain:")

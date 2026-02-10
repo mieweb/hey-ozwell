@@ -26,13 +26,21 @@ WAKE_PHRASES = ['hey-ozwell', "ozwell-i'm-done", 'go-ozwell', 'ozwell-go']
 #     'negative_samples': 2000,
 #     'augment_factor': 3
 # }
+# TRAINING_CONFIG = {
+#     'epochs': 50,
+#     'batch_size': 32,
+#     'learning_rate': 1e-3,
+#     'positive_samples': 500,
+#     'negative_samples': 500,
+#     'augment_factor': 3
+# }
 TRAINING_CONFIG = {
     'epochs': 50,
     'batch_size': 32,
     'learning_rate': 1e-3,
     'positive_samples': 500,
     'negative_samples': 500,
-    'augment_factor': 3
+    'augment_factor': 0,
 }
 
 def run_command(cmd, cwd=None):

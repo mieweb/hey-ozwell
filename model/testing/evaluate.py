@@ -267,17 +267,17 @@ def main():
     
     args = parser.parse_args()
     os.makedirs('../logs/testing', exist_ok=True)
-    handler = logging.FileHandler(f'../logs/testing/{args.phrase}.log', 'w')
+    handler = logging.FileHandler(f'../logs/testing/{str(Path(args.model).stem)}.log', 'w')
     logger.addHandler(handler)
     
     # Initialize evaluator
     evaluator = ModelEvaluator(args.model)
 
     test_dir = Path(args.test_data)
-    with open(test_dir.parent / 'training_manifest.json', 'r') as f:
+    with open(test_dir / 'training_manifest.json', 'r') as f:
         manifest = json.load(f)
     test_df = pd.DataFrame(manifest['test']['positive_samples'] + manifest['test']['negative_samples']).get(['file', 'label'])
-    test_df['file'] = test_df.apply(lambda row: os.path.join(args.test_dir, 'test', 'positive', row['file']) if row['label'] == 1 else os.path.join(args.test_dir, 'test', 'negative', row['file']), axis=1)
+    test_df['file'] = test_df.apply(lambda row: os.path.join(args.test_data, 'test', 'positive', row['file']) if row['label'] == 1 else os.path.join(args.test_data, 'test', 'negative', row['file']), axis=1)
 
     # Run main evaluation
     results = evaluator.evaluate_test_set(test_df, args.phrase)

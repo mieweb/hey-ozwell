@@ -23,6 +23,7 @@ import onnx
 import onnxruntime
 import pandas as pd 
 import os
+import random
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -33,13 +34,17 @@ class AudioDataset(Dataset):
     """Dataset for audio wake-word detection"""
     
     def __init__(self, samples: list, data_dir: str, sample_rate: int = 16000, 
-                 max_duration: float = 3.0, n_mels: int = 80):
+                 max_duration: float = 3.0, n_mels: int = 80, augment: bool = False, augment_prob: float = .5):
         self.data_dir = Path(data_dir)
         self.sample_rate = sample_rate
         self.max_duration = max_duration
         self.max_samples = int(max_duration * sample_rate)
         self.n_mels = n_mels
         self.samples = samples
+        self.augment = augment
+        if self.augment:
+            assert augment_prob <= 1.0 and augment_prob >= 0.0, f"augment_prob must be between 0.0 and 1.0 when augment is True"
+            self.augment_prob = augment_prob
             
     def __len__(self):
         return len(self.samples)
@@ -50,7 +55,10 @@ class AudioDataset(Dataset):
         
         # Load audio
         audio, sr = librosa.load(full_path, sr=self.sample_rate)
-        
+        # Augment Data
+        if self.augment and random.random() < self.augment_prob:
+            audio = self._apply_augmentation(audio)
+
         # Pad or truncate to fixed length
         if len(audio) > self.max_samples:
             audio = audio[:self.max_samples]
@@ -74,6 +82,31 @@ class AudioDataset(Dataset):
         
         return torch.FloatTensor(log_mel), torch.LongTensor([label])
 
+
+    def _apply_augmentation(self, audio: np.ndarray) -> np.ndarray:
+        """Apply random augmentation to audio sample"""
+        
+        # Speed/pitch variation
+        if random.random() < 0.7:
+            speed_factor = random.uniform(0.8, 1.2)
+            audio = librosa.effects.time_stretch(audio, rate=speed_factor)
+        
+        # Pitch shifting
+        if random.random() < 0.5:
+            pitch_shift = random.uniform(-2, 2)  # semitones
+            audio = librosa.effects.pitch_shift(audio, sr=self.sample_rate, n_steps=pitch_shift)
+        
+        # Add noise
+        if random.random() < 0.6:
+            noise_level = random.uniform(0.001, 0.01)
+            noise = noise_level * np.random.randn(len(audio))
+            audio = audio + noise
+        
+        # Normalize
+        audio = audio / max(abs(audio.max()), abs(audio.min()), 1e-7)
+        
+        return audio.astype(np.float32)
+    
 
 class WakeWordModel(nn.Module):
     """Wake-word detection model based on Hey Buddy architecture"""
@@ -195,7 +228,7 @@ class WakeWordTrainer:
         with torch.no_grad():
             for data, target in dataloader:
                 data, target = data.to(self.device), target.squeeze().to(self.device)
-                
+
                 output = self.model(data)
                 loss = self.criterion(output, target)
                 total_loss += loss.item()
@@ -257,7 +290,8 @@ class WakeWordTrainer:
             dynamic_axes={
                 'input': {0: 'batch_size'},
                 'output': {0: 'batch_size'}
-            }
+            },
+            dynamo=False
         )
         
         logger.info(f'Model exported to ONNX: {output_path}')
@@ -267,6 +301,22 @@ class WakeWordTrainer:
         onnx.checker.check_model(onnx_model)
         logger.info('ONNX model verification passed')
 
+def get_samples(data_dir: str, phrase: str, frac: float=.8):
+    manifest_path = Path(data_dir) / phrase / 'training_manifest.json'
+    if not manifest_path.exists():
+        raise FileNotFoundError(f"Training manifest not found: {manifest_path}")
+    with open(manifest_path, 'r') as f:
+        manifest = json.load(f)
+    df = pd.DataFrame(manifest['train']['positive_samples'] + manifest['train']['negative_samples']).get(['file', 'label'])
+    df['file'] = df.apply(lambda row: os.path.join(phrase, 'train', 'positive', row['file']) if row['label'] == 1 else os.path.join(phrase, 'train', 'negative', row['file']), axis=1)
+    train_df = df.groupby('label', group_keys=False).sample(frac=.8)
+    remainder = (len(df)-len(train_df))%32
+    if remainder != 0:
+        train_df = train_df.drop(train_df.sample(n=remainder).index)
+    val_df = df.drop(train_df.index)
+    print(train_df.value_counts('label'))
+    print(val_df.value_counts('label'))
+    return (train_df.to_records(index=False).tolist(), val_df.to_records(index=False).tolist())
 
 def main():
     parser = argparse.ArgumentParser(description='Train Hey Ozwell wake-word model')
@@ -284,53 +334,52 @@ def main():
     parser.add_argument('--learning-rate', type=float, default=1e-3,
                        help='Learning rate')
     parser.add_argument('--device', default='cpu',
-                       help='Training device (cpu/cuda)')
+                       help='Training device (cpu/cuda/mps)')
     parser.add_argument('--n-mels', type=int, default=80,
                        help='Number of mel frequency bands')
+    parser.add_argument('--augment', action='store_true',
+                       help='Augment training data')
+    parser.add_argument('--augment-prob', type=float, default=0.5,
+                       help='Probability of applying augmentation when looping through training data')
     
     args = parser.parse_args()
-
     os.makedirs('../logs/training', exist_ok=True)
-    handler = logging.FileHandler(f'../logs/training/{args.phrase}.log', 'w')
+    handler = logging.FileHandler(f'../logs/training/{str(Path(args.output).stem)}.log', 'w')
     logger.addHandler(handler)
     
     # Set device
     if args.device == 'cuda' and torch.cuda.is_available():
         device = 'cuda'
         logger.info('Using CUDA for training')
+    elif args.device == 'mps' and torch.backends.mps.is_available():
+        device = 'mps'
+        logger.info('Using MPS for training')
     else:
         device = 'cpu'
         logger.info('Using CPU for training')
     
-    # Load data
-    data_dir = Path(args.data_dir)
-    phrase_dir = data_dir / args.phrase
-    manifest_file = phrase_dir / 'training_manifest.json'
-    
-    if not manifest_file.exists():
-        raise FileNotFoundError(f"Training manifest not found: {manifest_file}")
-    else:
-        # Load manifest
-        with open(manifest_file, 'r') as f:
-            manifest = json.load(f)
-        train_df = pd.DataFrame(manifest['train']['positive_samples'] + manifest['train']['negative_samples']).get('file', 'label')
-        train_df['file'] = train_df.apply(lambda row: os.path.join('train', 'positive', row['file']) if row['label'] == 1 else os.path.join('train', 'negative', row['file']), axis=1)
-        train_samples = train_df.to_records(index=False)
-        logger.info(f"Loaded {len(train_samples)} samples from {manifest_file}")
+   
+    train_samples, val_samples = get_samples(args.data_dir, args.phrase, frac=0.8)
+    train_dataset, val_dataset = AudioDataset(train_samples, args.data_dir, n_mels=args.n_mels, augment=args.augment, augment_prob=args.augment_prob), AudioDataset(val_samples, args.data_dir, n_mels=args.n_mels, augment=False)
 
 
     # Create datasets
-    dataset = AudioDataset(train_samples, args.data_dir, n_mels=args.n_mels)
+    # dataset = AudioDataset(train_samples, args.data_dir, n_mels=args.n_mels)
     
     # Split into train/validation
-    train_size = int(0.8 * len(dataset))
-    val_size = len(dataset) - train_size
-    train_dataset, val_dataset = torch.utils.data.random_split(dataset, [train_size, val_size])
+    # train_size = int(0.8 * len(dataset))
+    # val_size = len(dataset) - train_size
+    # print(len(dataset), train_size, val_size)
+    # print(int(.2*len(dataset)))
+     
+    # train_dataset, val_dataset = torch.utils.data.random_split(dataset, [.8, .2])    
+
     
+
     # Create data loaders
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False)
-    
+
     # Create model
     model = WakeWordModel(n_mels=args.n_mels)
     logger.info(f"Model created with {sum(p.numel() for p in model.parameters())} parameters")
