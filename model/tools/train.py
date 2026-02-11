@@ -6,24 +6,21 @@ Based on the Hey Buddy framework for wake-word detection.
 
 import os
 import simplejson as json
+import random
 import argparse
-import logging
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional
-
+from typing import Tuple, Optional
+import logging
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
-import soundfile as sf
-import librosa
-from sklearn.metrics import accuracy_score, classification_report
-import onnx
+from sklearn.metrics import accuracy_score
 import onnxruntime
-import pandas as pd 
-import os
-import random
+import onnx
+import librosa
+import pandas as pd
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -52,9 +49,10 @@ class AudioDataset(Dataset):
     def __getitem__(self, idx):
         file_path, label = self.samples[idx]
         full_path = self.data_dir / file_path
-        
+
         # Load audio
         audio, sr = librosa.load(full_path, sr=self.sample_rate)
+
         # Augment Data
         if self.augment and random.random() < self.augment_prob:
             audio = self._apply_augmentation(audio)
@@ -224,15 +222,12 @@ class WakeWordTrainer:
         total_loss = 0.0
         all_predictions = []
         all_targets = []
-        
         with torch.no_grad():
             for data, target in dataloader:
                 data, target = data.to(self.device), target.squeeze().to(self.device)
-
                 output = self.model(data)
                 loss = self.criterion(output, target)
                 total_loss += loss.item()
-                
                 predictions = torch.argmax(output, dim=1)
                 all_predictions.extend(predictions.cpu().numpy())
                 all_targets.extend(target.cpu().numpy())
@@ -309,13 +304,8 @@ def get_samples(data_dir: str, phrase: str, frac: float=.8):
         manifest = json.load(f)
     df = pd.DataFrame(manifest['train']['positive_samples'] + manifest['train']['negative_samples']).get(['file', 'label'])
     df['file'] = df.apply(lambda row: os.path.join(phrase, 'train', 'positive', row['file']) if row['label'] == 1 else os.path.join(phrase, 'train', 'negative', row['file']), axis=1)
-    train_df = df.groupby('label', group_keys=False).sample(frac=.8)
-    remainder = (len(df)-len(train_df))%32
-    if remainder != 0:
-        train_df = train_df.drop(train_df.sample(n=remainder).index)
+    train_df = df.groupby('label', group_keys=False).sample(frac=frac)
     val_df = df.drop(train_df.index)
-    print(train_df.value_counts('label'))
-    print(val_df.value_counts('label'))
     return (train_df.to_records(index=False).tolist(), val_df.to_records(index=False).tolist())
 
 def main():
@@ -362,28 +352,14 @@ def main():
     train_samples, val_samples = get_samples(args.data_dir, args.phrase, frac=0.8)
     train_dataset, val_dataset = AudioDataset(train_samples, args.data_dir, n_mels=args.n_mels, augment=args.augment, augment_prob=args.augment_prob), AudioDataset(val_samples, args.data_dir, n_mels=args.n_mels, augment=False)
 
-
-    # Create datasets
-    # dataset = AudioDataset(train_samples, args.data_dir, n_mels=args.n_mels)
-    
-    # Split into train/validation
-    # train_size = int(0.8 * len(dataset))
-    # val_size = len(dataset) - train_size
-    # print(len(dataset), train_size, val_size)
-    # print(int(.2*len(dataset)))
-     
-    # train_dataset, val_dataset = torch.utils.data.random_split(dataset, [.8, .2])    
-
-    
-
     # Create data loaders
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False)
+    val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, drop_last=True)
 
     # Create model
     model = WakeWordModel(n_mels=args.n_mels)
     logger.info(f"Model created with {sum(p.numel() for p in model.parameters())} parameters")
-    
+        
     # Create trainer
     trainer = WakeWordTrainer(model, device)
     trainer.setup_optimizer(learning_rate=args.learning_rate)
