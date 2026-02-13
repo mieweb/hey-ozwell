@@ -1,0 +1,19 @@
+Evaluation Report for hey-ozwell
+==================================================
+
+Overall Performance:
+  Accuracy: 0.9100
+  Precision: 0.8161
+  Recall: 0.7100
+  F1 Score: 0.7594
+
+Detection Details:
+  True Positives: 71
+  True Negatives: 384
+  False Positives: 16
+  False Negatives: 29
+
+Performance Metrics:
+  False Positive Rate: 0.0400
+  Average Inference Time: 0.33 ms
+  Total Test Samples: 500
