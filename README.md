@@ -15,8 +15,6 @@ Currently shipping in the demo:
 |---|---|
 | `hey ozwell` | shipped (MLP, `prod/js/models/hey-ozwell.onnx`) |
 | `ozwell i'm done` | shipped (MLP, `prod/js/models/ozwell-i'm-done.onnx`) |
-| `go ozwell` | TODO — only available via the legacy Conv2d pipeline |
-| `ozwell go` | TODO — only available via the legacy Conv2d pipeline |
 
 ## Quickstart — run the demo
 

@@ -66,7 +66,6 @@ The full set of `train` options (W&B logging, augmentation probabilities, batch 
 ## Roadmap
 
 - [ ] Validate training recipe end-to-end on `data/data.zip` and reproduce `hey-ozwell.onnx`.
-- [ ] Train `go-ozwell` and `ozwell-go` wake-word models (currently only shipped as Lineage B Conv2d in `legacy/`).
 - [ ] Add CI smoke test: `python -c "from heybuddy.wakeword import WakeWordMLPModel"`.
 - [ ] Document hardware requirements (GPU memory, training duration) once validated.
 
