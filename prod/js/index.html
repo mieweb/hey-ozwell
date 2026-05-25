@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Client Test</title>
+        <link rel="stylesheet" href="style.css" />
+        <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.19.0/dist/ort.min.js"></script>
+        <script type="module" src="hey-buddy.js"></script>
+        <script src="index.js"></script>
+    </head>
+    <body>
+        <div class="card">
+            <section id="logo">
+                <img src="logo.png" alt="Hey Ozwell!"/>
+            </section>
+            <section id="headline">
+                <p>The wake word models used in this demo were trained using the <a href="https://github.com/painebenjamin/hey-buddy" target="_blank">Hey Buddy</a> library.</p>
+                <p>This space serves as a demonstration of wake word detection. Say something like, <em>&ldquo;Hey ozwell, how are you?&rdquo;</em> to see the wake word and voice activity detection in action. Your voice command will be isolated as an audio clip, which is then ready to be sent to your application's backend for further processing.</p>
+            </section>
+            <section id="graphs"></section>
+            <section id="recording">
+                <label>Recording</label>
+                <div id="audio">No recording yet</div>
+            </section>
+        </div>
+    </body>
+</html>

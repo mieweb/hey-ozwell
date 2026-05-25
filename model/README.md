@@ -1,135 +1,76 @@
-# Model Training & Testing
+# Model — Hey Ozwell Wake-Word Training
 
-This directory contains the training pipeline and evaluation tools for Hey Ozwell wake-word models, built on top of the [Hey Buddy!](https://huggingface.co/spaces/bennyboy/hb) framework.
+This folder is the **single source of truth** for the Hey Ozwell wake-word model: training framework, training data, and exported artifacts that the JS runtime in [`prod/js/`](../prod/js/) consumes.
 
-## Directory Structure
+## Lineage
 
-```
-model/
-├── tools/           # Training and data preparation scripts
-├── testing/         # Evaluation and accuracy testing
-├── data/           # Training datasets (gitignored)
-├── exports/        # Trained ONNX models (gitignored)
-└── README.md       # This file
-```
+We use the **heybuddy MLP** architecture (a fork of [painebenjamin/hey-buddy](https://github.com/painebenjamin/hey-buddy), Apache-2.0).
 
-## Quick Start
+- Per-wake-word classifier: tiny MLP over a window of 16 speech-embedding frames (96 dims each) → ~27 KB ONNX
+- Shared upstream pipeline at inference time: mel-spectrogram → speech-embedding → MLP classifier → Silero VAD gating
+- The shared upstream ONNX models (`silero-vad`, `mel-spectrogram`, `speech-embedding`) are loaded by the JS runtime directly from Hugging Face: <https://huggingface.co/benjamin-paine/hey-buddy>
 
-### 1. Install Dependencies
+The earlier custom Conv2d pipeline is preserved under [`legacy/`](./legacy/).
 
-```bash
-pip install torch torchaudio onnx onnxruntime librosa soundfile numpy scipy
-```
+## Layout
 
-### 2. Prepare Training Data
+| Path | Purpose |
+|---|---|
+| `heybuddy/` | Vendored Hey Buddy Python package (training, conversion, datasets, modules). Upstream: <https://github.com/painebenjamin/hey-buddy>. Apache-2.0. |
+| `tools/convert.py` | `.pt` → `.onnx` conversion, output lands in `../prod/js/models/` |
+| `exports/heybuddy/*.pt` | Trained PyTorch checkpoints (LFS) — currently `hey_ozwell_final.pt`, `ozwell_i_m_done_final.pt` |
+| `data/` | Training dataset (LFS-stored `data.zip`, see [`data/README.md`](./data/README.md)) |
+| `docs/onnx_export/` | PyTorch→ONNX export reports captured during the original conversion |
+| `legacy/` | Archived custom Conv2d pipeline (4 wake words, ~60 MB models) |
+| `requirements.txt` | Python deps for training and conversion |
 
-```bash
-cd tools
-python prepare_data.py --phrase "hey ozwell" --positive-samples 500 --negative-samples 2000
-```
-
-### 3. Train Model
+## Quickstart: convert existing `.pt` → runtime ONNX
 
 ```bash
-python train.py --phrase "hey ozwell" --epochs 100 --output ../exports/hey-ozwell.onnx
+cd model
+pip install -r requirements.txt
+
+# Default emits ozwell-i'm-done.onnx into prod/js/models/
+python tools/convert.py
+
+# Or specify both:
+python tools/convert.py \
+    --input exports/heybuddy/hey_ozwell_final.pt \
+    --output ../prod/js/models/hey-ozwell.onnx
 ```
 
-### 4. Evaluate Performance
+## Training
+
+> **Status — TODO**: the original training invocations were not captured in the upstream `hey-ozwell-demo` repo. The CLI surface below was reverse-engineered from [`heybuddy/__main__.py`](./heybuddy/__main__.py). Treat as a starting template until validated against amandamarg's original workflow.
 
 ```bash
-cd ../testing
-python evaluate.py --model ../exports/hey-ozwell.onnx --test-data ../data/hey-ozwell/test/
+cd model
+pip install -r requirements.txt
+unzip data/data.zip -d data/   # extracts positive + negative audio
+
+# Train one wake word
+python -m heybuddy train "hey ozwell" \
+    --steps 5000 \
+    --threshold 0.5 \
+    --positive-samples 1000 \
+    --adversarial-samples 1000
+
+# Convert to ONNX (drops into prod/js/models/)
+python tools/convert.py \
+    --input ./hey-ozwell-final.pt \
+    --output ../prod/js/models/hey-ozwell.onnx
 ```
 
-## Wake Phrases
+The full set of `train` options (W&B logging, augmentation probabilities, batch sizes, validation/testing splits) lives in [`heybuddy/__main__.py`](./heybuddy/__main__.py) — run `python -m heybuddy train --help` for the live list.
 
-The following wake phrases are supported:
+## Roadmap
 
-1. **"hey ozwell"** → start recording
-2. **"ozwell i'm done"** → stop recording  
-3. **"go ozwell"** → stop recording + respond
-4. **"ozwell go"** → stop recording + respond
+- [ ] Validate training recipe end-to-end on `data/data.zip` and reproduce `hey-ozwell.onnx`.
+- [ ] Add CI smoke test: `python -c "from heybuddy.wakeword import WakeWordMLPModel"`.
+- [ ] Document hardware requirements (GPU memory, training duration) once validated.
 
-## Training Process
+## Credits
 
-### Data Collection
-
-- **Positive samples**: Clear recordings of the target phrase
-- **Negative samples**: Similar-sounding phrases, ambient noise, silence
-- **Augmentation**: Speed variation (0.8x-1.2x), pitch shifting, background noise
-
-### Model Architecture
-
-Based on Hey Buddy's architecture:
-- Mel-spectrogram feature extraction
-- Convolutional neural network backbone
-- Binary classification (wake phrase vs. not)
-- Optimized for ONNX Runtime Web
-
-### Evaluation Metrics
-
-- **Detection Rate**: % of true positives correctly identified (target: >95%)
-- **False Positive Rate**: False alarms per hour in quiet environment (target: <1/hour)
-- **Latency**: Time from phrase end to detection (target: <250ms)
-
-## Advanced Usage
-
-### Custom Training Data
-
-Place your training data in the following structure:
-
-```
-data/
-├── hey-ozwell/
-│   ├── positive/    # .wav files containing "hey ozwell"
-│   ├── negative/    # .wav files without wake phrase
-│   └── test/        # Evaluation dataset
-├── ozwell-im-done/
-│   ├── positive/
-│   ├── negative/
-│   └── test/
-└── ...
-```
-
-### Model Optimization
-
-For production deployment:
-
-```bash
-python optimize.py --input ../exports/hey-ozwell.onnx --output ../exports/hey-ozwell-optimized.onnx
-```
-
-### Batch Training
-
-Train all phrases at once:
-
-```bash
-python train_all.py --config config.yaml
-```
-
-## Troubleshooting
-
-### Low Detection Rate
-- Increase positive training samples
-- Add more diverse speaking styles
-- Adjust detection threshold
-
-### High False Positives
-- Add more negative samples
-- Include similar-sounding phrases in negative set
-- Reduce detection threshold
-
-### Performance Issues
-- Use GPU training: `--device cuda`
-- Reduce model complexity: `--model-size small`
-- Enable mixed precision: `--mixed-precision`
-
-## Integration with Production
-
-Once trained, models are deployed to the JavaScript SDK:
-
-```bash
-cp exports/*.onnx ../prod/js/models/
-```
-
-See `/prod/js/README.md` for integration instructions.
+- **Hey Buddy** by Benjamin Paine — <https://github.com/painebenjamin/hey-buddy> (Apache-2.0). Vendored in `heybuddy/`.
+- **Wake-word demo + initial Ozwell models** by [@amandamarg](https://github.com/amandamarg) — <https://github.com/amandamarg/hey-ozwell-demo>.
+- **Training data generation tooling** also by [@amandamarg](https://github.com/amandamarg) — <https://github.com/amandamarg/hey-ozwell-data> (mirrored into `data/`).
