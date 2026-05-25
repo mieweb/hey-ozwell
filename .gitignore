@@ -1,6 +1,19 @@
-*.wav
-model/data/
-model/data.zip
 .env
 *.DS_Store
 .DS_Store
+.playwright-mcp/
+
+# Node
+prod/js/node_modules/
+prod/js/dist/
+prod/js/build/
+
+# Extracted training data (data.zip itself is tracked via LFS)
+model/data/positive/
+model/data/negative/
+model/data/*.npy
+model/data/*.json
+
+# Loose wavs (use LFS if intentionally committing)
+*.wav
+!model/data/data.zip
