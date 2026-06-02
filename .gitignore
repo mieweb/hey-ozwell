@@ -17,3 +17,11 @@ model/data/*.json
 # Loose wavs (use LFS if intentionally committing)
 *.wav
 !model/data/data.zip
+
+# Python caches
+__pycache__/
+*.pyc
+
+# Eval harness scratch (downloaded models + generated figures — regenerate, don't commit)
+model/eval/pretrained/
+model/eval/figures/
