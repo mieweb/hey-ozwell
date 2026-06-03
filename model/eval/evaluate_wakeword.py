@@ -54,6 +54,9 @@ def load_16k_mono(path):
         from math import gcd
         g = gcd(sr, 16000)
         audio = resample_poly(audio, 16000 // g, sr // g).astype("float32")
+    peak = float(np.max(np.abs(audio))) if audio.size else 0.0
+    if peak > 1e-5:                               # peak-normalize loudness (matches training; see
+        audio = audio / peak                      # model/docs/audio-scale-mismatch.md)
     if len(audio) < TARGET:                       # center the clip in silence
         pad = TARGET - len(audio)
         audio = np.concatenate(

@@ -6,7 +6,11 @@ import threading
 import warnings
 
 import numpy
-import numpy.compat
+import io as _io, pickle as _pickle, types as _types
+numpy.compat = _types.SimpleNamespace(
+    pickle=_pickle,
+    isfileobj=lambda f: isinstance(f, (_io.FileIO, _io.BufferedReader, _io.BufferedWriter, _io.BufferedRandom)),
+)
 
 from numpy.lib import format as numpy_format
 
