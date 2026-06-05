@@ -1,0 +1,7 @@
+=== diverse started Fri Jun  5 06:27:35 PM UTC 2026 ===
++15k diverse Piper positives (VCTK 109 UK + 5 US) into 100k libritts; test=held-out ElevenLabs
+[1/4] generate diverse positives (Fri Jun  5 06:27:35 PM UTC 2026) -> logs/diverse_gen.log ...
+  gen exit=0 : saved heybuddy/precalculated/diverse_pos.npy shape=(15000, 16, 96) mean(frames)=2.81
+[2/4] back up clean 100k + inject diverse into positive cache
+positives now (115000, 16, 96) = 100000 libritts + 15000 diverse
+[3/4] retrain with 115000 positives (Fri Jun  5 07:10:03 PM UTC 2026) -> logs/diverse_train.log
