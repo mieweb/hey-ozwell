@@ -1,0 +1,36 @@
+=== negative-ratio sweep Mon Jun  8 03:00:32 PM UTC 2026 ===
+x1 positives (127384, 16, 96)
+negs_B (105000, 17, 96)
+
+>>> CONFIG B_105k: 127384 pos / 105000 neg  (Mon Jun  8 03:00:37 PM UTC 2026)
+  train exit=0 Mon Jun  8 04:19:36 PM UTC 2026
+  exported
+  [B_105k] recall | per-clip neg FPR@0.5=91%
+    American               @0.5= 96.0%  @0.7= 92.0%  (n=100)
+    accent en-AU           @0.5=100.0%  @0.7=100.0%  (n=12)
+    accent en-GB           @0.5=100.0%  @0.7=100.0%  (n=16)
+    accent en-IN           @0.5=100.0%  @0.7=100.0%  (n=12)
+    accent en-US           @0.5= 87.0%  @0.7= 87.0%  (n=23)
+=== B_105k: FP/hour over 1.59h of held-out real speech (410 clips) ===
+  0.5       9 fires =     5.7/hr            0 fires =     0.0/hr
+  0.7       5 fires =     3.2/hr            0 fires =     0.0/hr
+  0.9       0 fires =     0.0/hr            0 fires =     0.0/hr
+
+[extract] more People's Speech for config C (Mon Jun  8 04:21:46 PM UTC 2026)...
+negs_C (160000, 17, 96) from B + 6 extract files
+
+>>> CONFIG C_extract: 127384 pos / 160000 neg  (Mon Jun  8 04:40:56 PM UTC 2026)
+  train exit=0 Mon Jun  8 05:58:54 PM UTC 2026
+  exported
+  [C_extract] recall | per-clip neg FPR@0.5=75%
+    American               @0.5= 92.0%  @0.7= 86.0%  (n=100)
+    accent en-AU           @0.5=100.0%  @0.7=100.0%  (n=12)
+    accent en-GB           @0.5= 93.8%  @0.7= 93.8%  (n=16)
+    accent en-IN           @0.5= 83.3%  @0.7= 83.3%  (n=12)
+    accent en-US           @0.5= 95.7%  @0.7= 91.3%  (n=23)
+=== C_extract: FP/hour over 1.59h of held-out real speech (410 clips) ===
+  0.5       1 fires =     0.6/hr            0 fires =     0.0/hr
+  0.7       1 fires =     0.6/hr            0 fires =     0.0/hr
+  0.9       0 fires =     0.0/hr            0 fires =     0.0/hr
+
+=== NEGSWEEP DONE Mon Jun  8 06:01:03 PM UTC 2026 — compare B(105k) vs C(155k) vs baseline x1(52.5k neg, FP~18/hr) ===
