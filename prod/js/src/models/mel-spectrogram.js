@@ -55,6 +55,19 @@ export class MelSpectrogram extends ONNXModel {
      * @throws {Error} - If the input data is not a Float32Array
      */
     async execute(input) {
+        // SCALE FIX (MIE 2026-06-09): peak-normalize each buffer to match training
+        // (heybuddy/embeddings.py divides each clip by its peak). Without this, the browser
+        // feeds un-normalized audio and the model separates by loudness, not content.
+        let peak = 0;
+        for (let i = 0; i < input.length; i++) {
+            const a = Math.abs(input[i]);
+            if (a > peak) peak = a;
+        }
+        if (peak > 1e-5) {
+            const normed = new Float32Array(input.length);
+            for (let i = 0; i < input.length; i++) normed[i] = input[i] / peak;
+            input = normed;
+        }
         const inputTensor = await ONNX.createTensor(
             "float32",
             input,

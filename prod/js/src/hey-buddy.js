@@ -70,6 +70,8 @@ export class HeyBuddy {
         options.negativeVadCount = options.negativeVadCount || 8;
         this.wakeWordThreads = options.wakeWordThreads || 4;
         this.wakeWordThreshold = options.wakeWordThreshold || 0.5;
+        // Per-word thresholds (keyed by model file name, e.g. "hey-ozwell"); falls back to wakeWordThreshold.
+        this.wakeWordThresholds = options.wakeWordThresholds || {};
         this.wakeWordInterval = options.wakeWordInterval || 2.0; // How often a wake word can be uttered
 
         // Get options or use defaults for models
@@ -114,7 +116,8 @@ export class HeyBuddy {
         this.wakeWordEmbeddingFrames = wakeWordEmbeddingFrames;
         for (let model of modelArray) {
             let modelName = model.split("/").pop().split(".")[0];
-            this.wakeWords[modelName] = new WakeWord(model, this.wakeWordThreshold);
+            let modelThreshold = this.wakeWordThresholds[modelName] ?? this.wakeWordThreshold;
+            this.wakeWords[modelName] = new WakeWord(model, modelThreshold);
             this.wakeWords[modelName].test(this.debug);
         }
 

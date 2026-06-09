@@ -80,6 +80,12 @@ const graphLineWidth = 1;
 const options = {
     debug: true,
     modelPath: wakeWords.map((word) => `../models/${word.replace(/ /g, '-')}.onnx`),
+    // Per-word operating thresholds from offline eval (each meets <1 FP/hr at its point):
+    //   hey-ozwell @0.8 (0 FP/hr), ozwell-i'm-done @0.5 (0.6 FP/hr).
+    wakeWordThresholds: {
+        "hey-ozwell": 0.8,
+        "ozwell-i'm-done": 0.5,
+    },
     vadModelPath: `${rootUrl}/pretrained/silero-vad.onnx`,
     spectrogramModelPath: `${rootUrl}/pretrained/mel-spectrogram.onnx`,
     embeddingModelPath: `${rootUrl}/pretrained/speech-embedding.onnx`,

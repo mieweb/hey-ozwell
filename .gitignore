@@ -30,3 +30,4 @@ model/checkpoints/
 model/heybuddy/precalculated/
 model/heybuddy/pretrained/
 model/logs/*.log
+prod/js/models/*.amanda-bak
