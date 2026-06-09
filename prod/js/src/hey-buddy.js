@@ -306,15 +306,16 @@ export class HeyBuddy {
         }
         // Winner-take-all (MIE 2026-06-09): the two phrases share the word "ozwell" and can
         // co-fire on a single utterance. Since start/stop are mutually exclusive, when more than
-        // one wake word crosses threshold in the same window, fire ONLY the one that exceeds its
-        // own threshold by the largest margin (margin = probability - threshold, so the comparison
-        // is fair across per-word thresholds, e.g. 0.8 vs 0.5).
+        // one wake word crosses its threshold in the same window, fire ONLY the most CONFIDENT one
+        // (highest raw probability). NOTE: do NOT compare by margin (prob - threshold) — that biases
+        // toward the lower-threshold word (ozwell-done @0.5 out-margins hey-ozwell @0.8 even when you
+        // clearly said "hey ozwell"). Raw probability is the correct comparison here.
         let best = null;
         for (let name in returnMap) {
             if (returnMap[name].detected) {
-                const margin = returnMap[name].probability - this.wakeWords[name].threshold;
-                if (best === null || margin > best.margin) {
-                    best = { name, margin };
+                const prob = returnMap[name].probability;
+                if (best === null || prob > best.prob) {
+                    best = { name, prob };
                 }
             }
         }
