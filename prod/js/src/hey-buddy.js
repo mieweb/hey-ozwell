@@ -304,10 +304,22 @@ export class HeyBuddy {
                 returnMap[name] = wordCalled;
             }
         }
+        // Winner-take-all (MIE 2026-06-09): the two phrases share the word "ozwell" and can
+        // co-fire on a single utterance. Since start/stop are mutually exclusive, when more than
+        // one wake word crosses threshold in the same window, fire ONLY the one that exceeds its
+        // own threshold by the largest margin (margin = probability - threshold, so the comparison
+        // is fair across per-word thresholds, e.g. 0.8 vs 0.5).
+        let best = null;
         for (let name in returnMap) {
             if (returnMap[name].detected) {
-                this.wakeWordDetected(name);
+                const margin = returnMap[name].probability - this.wakeWords[name].threshold;
+                if (best === null || margin > best.margin) {
+                    best = { name, margin };
+                }
             }
+        }
+        if (best !== null) {
+            this.wakeWordDetected(best.name);
         }
         return returnMap;
     }
