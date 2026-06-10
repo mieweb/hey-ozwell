@@ -110,6 +110,18 @@ export class HeyBuddy {
         this.embeddingBuffer = null;
         this.embeddingBufferArray = []
 
+        // --- Voiceprint (per-user enrollment) layer ---
+        // Stored voiceprints keyed by wake-word name; each is an array of Float32Array
+        // (each a flattened [16x96] embedding window captured during enrollment). At
+        // runtime we cosine-match the live embedding window against these.
+        this.voiceprints = {};
+        this.voiceprintThreshold = options.voiceprintThreshold ?? 0.85;
+        this.voiceprintThresholds = options.voiceprintThresholds || {};
+        // The voiceprint may only BOOST a phrase the general model already weakly hears, never
+        // fire one it hears nothing of — this stops enrolling a DIFFERENT phrase ("hey doug").
+        this.voiceprintGate = options.voiceprintGate ?? 0.3;
+        this.embeddingMean = null; // running "common-mode" embedding, subtracted before cosine
+
         // Initialize wake word models
         this.wakeWords = {};
         this.wakeWordTimes = {};
@@ -142,6 +154,40 @@ export class HeyBuddy {
             targetSampleRate
         );
         this.batcher.onBatch((batch) => this.process(batch));
+    }
+
+    /**
+     * Set a user's enrolled voiceprint for a wake word.
+     * @param {string} name - Wake-word name (e.g. "hey-ozwell").
+     * @param {Float32Array[]} vectors - Flattened embedding windows captured at enrollment.
+     */
+    setVoiceprint(name, vectors) { this.voiceprints[name] = vectors || []; }
+    clearVoiceprint(name) { delete this.voiceprints[name]; }
+    hasVoiceprint(name) {
+        return Array.isArray(this.voiceprints[name]) && this.voiceprints[name].length > 0;
+    }
+
+    /**
+     * Max cosine similarity between a live embedding window and the stored voiceprint set.
+     * Cosine compares DIRECTION not magnitude, so it ignores loudness and keys on what the
+     * sound actually is. Returns 0..1 (1 = near-identical).
+     */
+    voiceprintSimilarity(name, liveVec) {
+        const set = this.voiceprints[name];
+        if (!Array.isArray(set) || set.length === 0 || !liveVec) return 0;
+        const mean = this.embeddingMean; // subtract the common-mode so cosine reflects CONTENT
+        let best = -1; // allow negative (poor-match) scores through, don't floor them at 0
+        for (const ref of set) {
+            let dot = 0, na = 0, nb = 0;
+            const n = Math.min(ref.length, liveVec.length);
+            for (let i = 0; i < n; i++) {
+                const a = mean ? ref[i] - mean[i] : ref[i];
+                const b = mean ? liveVec[i] - mean[i] : liveVec[i];
+                dot += a * b; na += a * a; nb += b * b;
+            }
+            if (na > 0 && nb > 0) { const s = dot / (Math.sqrt(na) * Math.sqrt(nb)); if (s > best) best = s; }
+        }
+        return best;
     }
 
     /**
@@ -310,6 +356,16 @@ export class HeyBuddy {
         // (highest raw probability). NOTE: do NOT compare by margin (prob - threshold) — that biases
         // toward the lower-threshold word (ozwell-done @0.5 out-margins hey-ozwell @0.8 even when you
         // clearly said "hey ozwell"). Raw probability is the correct comparison here.
+        // Voiceprint layer: cosine-match the live embedding window against each phrase's
+        // enrolled voiceprint. Attach the score (for graphing) and use it as a FALLBACK so a
+        // user the general model is weak on (e.g. their accent) still triggers on a match.
+        const liveVec = this.embeddingBuffer ? this.embeddingBuffer.data : null;
+        for (let name in returnMap) {
+            returnMap[name].voiceprintSim = this.hasVoiceprint(name)
+                ? this.voiceprintSimilarity(name, liveVec) : 0;
+        }
+
+        // Model winner-take-all (highest raw probability among model-detected phrases).
         let best = null;
         for (let name in returnMap) {
             if (returnMap[name].detected) {
@@ -321,6 +377,18 @@ export class HeyBuddy {
         }
         if (best !== null) {
             this.wakeWordDetected(best.name);
+        } else {
+            // General model fired nothing -> fall back to the strongest voiceprint match.
+            let vbest = null;
+            for (let name in returnMap) {
+                const sim = returnMap[name].voiceprintSim;
+                const vt = this.voiceprintThresholds[name] ?? this.voiceprintThreshold;
+                // GATE: require the model to at least weakly hear THIS phrase, so the voiceprint
+                // can only amplify the real wake word — not fire a different one ("hey doug").
+                const modelLit = returnMap[name].probability >= this.voiceprintGate;
+                if (sim >= vt && modelLit && (vbest === null || sim > vbest.sim)) vbest = { name, sim };
+            }
+            if (vbest !== null) this.wakeWordDetected(vbest.name);
         }
         return returnMap;
     }
@@ -361,7 +429,18 @@ export class HeyBuddy {
         if (this.embeddingBufferArray.length > maxEmbeddings) this.embeddingBufferArray.shift();
 
         this.embeddingBuffer = await embeddingBufferArrayToEmbedding(this.embeddingBufferArray, numFramesPerEmbedding, this.embeddingDim);
+
         const {isSpeaking, speechProbability, justStoppedSpeaking, justStartedSpeaking} = await this.vad.hasSpeechAudio(lastBatch);
+
+        // Running BACKGROUND mean embedding, updated ONLY during non-speech so it stays an
+        // ambient baseline and can't get contaminated by the phrase you're testing. We
+        // subtract it in voiceprintSimilarity so cosine reflects content, not the shared
+        // common-mode that otherwise pins every comparison near 0.9.
+        if (!isSpeaking && this.embeddingBuffer && this.embeddingBuffer.data) {
+            const d = this.embeddingBuffer.data;
+            if (!this.embeddingMean || this.embeddingMean.length !== d.length) this.embeddingMean = Float32Array.from(d);
+            else for (let i = 0; i < d.length; i++) this.embeddingMean[i] += 0.02 * (d[i] - this.embeddingMean[i]);
+        }
 
         if(justStartedSpeaking) this.speechStart();
         if(justStoppedSpeaking) this.speechEnd();
@@ -374,7 +453,10 @@ export class HeyBuddy {
                 listening: true,
                 recording: this.recording,
                 speech: {probability: speechProbability, active: isSpeaking},
-                wakeWords: wakeWordsCalled
+                wakeWords: wakeWordsCalled,
+                // Live [16x96] embedding window (flattened) — what enrollment captures and
+                // what the voiceprint layer matches against. Present only while listening.
+                embedding: this.embeddingBuffer ? this.embeddingBuffer.data : null
             });
         } else {
             // Trigger callbacks right away if we're not listening
@@ -391,7 +473,8 @@ export class HeyBuddy {
                         return carry;
                     },
                     {}
-                )
+                ),
+                embedding: this.embeddingBuffer ? this.embeddingBuffer.data : null
             });
         }
 
