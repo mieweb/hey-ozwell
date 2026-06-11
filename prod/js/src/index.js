@@ -332,17 +332,27 @@ document.addEventListener("DOMContentLoaded", async () => {
         sessionChunks = [];
         sessionProc = cmdAudioCtx.createScriptProcessor(4096, 1, 1);
         sessionSink = cmdAudioCtx.createGain(); sessionSink.gain.value = 0; // mute -> no feedback
-        sessionProc.onaudioprocess = (e) => sessionChunks.push(Float32Array.from(e.inputBuffer.getChannelData(0)));
+        // Track silence so a session can auto-finish if the stop phrase never fires — the
+        // invisible safety net that replaces the old Stop button. ~8s of quiet after some
+        // speech ends it. (Saying "ozwell i'm done" is loud, so it resets this and stops first.)
+        let silentSamples = 0, sawSpeech = false;
+        const SILENCE_THRESH = 0.015, SILENCE_LIMIT = 8 * 16000;
+        sessionProc.onaudioprocess = (e) => {
+            const d = e.inputBuffer.getChannelData(0);
+            sessionChunks.push(Float32Array.from(d));
+            let p = 0; for (let i = 0; i < d.length; i++) { const a = Math.abs(d[i]); if (a > p) p = a; }
+            if (p > SILENCE_THRESH) { sawSpeech = true; silentSamples = 0; }
+            else if (sawSpeech && (silentSamples += d.length) > SILENCE_LIMIT) {
+                silentSamples = 0; setTimeout(() => stopAndTranscribe(false), 0); // auto-finish on silence
+            }
+        };
         cmdSource.connect(sessionProc); sessionProc.connect(sessionSink); sessionSink.connect(cmdAudioCtx.destination);
         sessionActive = true;
         showSessionUI();
     }
 
     function showSessionUI() {
-        integ.innerHTML = `🎤 <b>dictating…</b> say <b>“ozwell i'm done”</b> when finished &nbsp;` +
-            `<button id="oz-stop" style="${SV_BTN};border-color:#ff5a5a">⏹ Stop</button>`;
-        const b = document.getElementById("oz-stop");
-        if (b) b.onclick = () => stopAndTranscribe();
+        integ.innerHTML = `🎤 <b>dictating…</b> say <b>“ozwell i'm done”</b> when you're finished`;
     }
 
     async function stopAndTranscribe(stripStop) {
@@ -363,7 +373,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         try {
             let text = (await w.transcribe(samples, 16000)).replace(/\[BLANK_AUDIO\]/gi, "").trim();
             // Ended by voice: strip a trailing "ozwell i'm done" from the TEXT (precise — keeps
-            // real words a blind audio trim would eat). Button stop passes false.
+            // real words a blind audio trim would eat). Silence auto-stop passes false.
             if (stripStop) text = text.replace(/[\s,]*(\bozwell\b[\s,]*)?i['’]?m\s+done[\s.!?,]*$/i, "").trim();
             if (text) { integ.innerHTML = `🗣️ <b>“${text}”</b> → sent to Ozwell`; sendToWidget(text); }
             else { integ.innerHTML = "🗣️ (no speech recognized)"; }
