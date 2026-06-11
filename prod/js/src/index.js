@@ -139,6 +139,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         const audioElement = blobToAudio(audioBlob);
         audioContainer.innerHTML = "";
         audioContainer.appendChild(audioElement);
+        // We finally have the wake utterance — run the speaker-verification gate on it.
+        runWakeGate(audioSamples);
     });
 
     // --- Integration (Option B): wake word drives the REAL Ozwell widget ---------
@@ -177,15 +179,119 @@ document.addEventListener("DOMContentLoaded", async () => {
         else { pendingContent = content; setTimeout(() => { if (pendingContent) { sendToWidget(pendingContent); pendingContent = null; } }, 2500); }
     }
 
+    // Wake detection now only STASHES the intent; the actual decision to drive Ozwell
+    // happens in runWakeGate() once we have the recorded utterance (onRecording), so we
+    // can verify the speaker first. Anyone can trigger the wake word; only the enrolled
+    // doctor's voice acts on it.
+    let pendingWake = null;
     heyBuddy.onDetected("hey-ozwell", () => {
-        driveOzwell("Hey Ozwell — a clinician just started a session.",
-                    "🔔 <b>“hey ozwell” detected</b> → opening Ozwell…");
+        pendingWake = { content: "Hey Ozwell — a clinician just started a session.",
+                        label: "🔔 <b>“hey ozwell” detected</b>" };
     });
     heyBuddy.onDetected("ozwell-i'm-done", () => {
-        driveOzwell("Ozwell, I'm done — please wrap up and summarize the session.",
-                    "🛑 <b>“ozwell i'm done” detected</b> → ending session…");
+        pendingWake = { content: "Ozwell, I'm done — please wrap up and summarize the session.",
+                        label: "🛑 <b>“ozwell i'm done” detected</b>" };
     });
+
+    // Called from onRecording with the captured wake utterance (16 kHz).
+    function runWakeGate(audioSamples) {
+        if (!pendingWake || window.__ozEnrollActive) { pendingWake = null; return; }
+        const { content, label } = pendingWake; pendingWake = null;
+        const sv = window.SpeakerVerify;
+        if (sv && sv.isLoaded() && sv.hasEnrollment()) {
+            // Gate ACTIVE: cosine-match the utterance against the enrolled doctor centroid.
+            const { score, pass } = sv.verify(audioSamples, 16000);
+            if (pass) {
+                driveOzwell(content, `${label} → ✅ <b>doctor verified</b> (${score.toFixed(2)}) → opening Ozwell…`);
+            } else {
+                integ.innerHTML = `${label} → 🔒 <b>not the enrolled doctor</b> (match ${score.toFixed(2)}) — ignored`;
+            }
+        } else {
+            // Gate OFF (no doctor enrolled yet, or verifier still loading): behave as before.
+            const note = (sv && sv.hasEnrollment())
+                ? " <span style='color:#9fb6cc'>(verifier still loading…)</span>"
+                : " <span style='color:#9fb6cc'>(no doctor enrolled — gate off)</span>";
+            driveOzwell(content, `${label} → opening Ozwell…${note}`);
+        }
+    }
     // ---------------------------------------------------------------------------
+
+    // ===================== Doctor speaker-ID enrollment ========================
+    // Enroll the doctor's VOICE (TitaNet speaker embedding) so only they wake Ozwell.
+    // Distinct from the content-voiceprint POC below: this GATES (act/no-act on the
+    // speaker), that one BOOSTS recall for the doctor's accented phrase. They compose.
+    const SV_BTN = "font:13px monospace;padding:6px 12px;border-radius:6px;cursor:pointer;border:1px solid #2ecc71;background:#12233a;color:#cde";
+    const svSleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+    const svPanel = document.createElement("div");
+    svPanel.style = "margin:1em 0;padding:0.75em;border:1px solid #2ecc71;border-radius:6px;" +
+                    "font-family:monospace;color:#cde;background:#0b1622;line-height:1.6";
+    function renderSvPanel() {
+        const sv = window.SpeakerVerify;
+        const enrolled = sv && sv.hasEnrollment();
+        svPanel.innerHTML =
+            "<b>🩺 Doctor speaker-ID</b> — gate the wake word to <i>your</i> voice only.<br>" +
+            "<span style='color:#9fb6cc'>Status: " +
+            (enrolled ? "enrolled ✅ — gate ON (only your voice wakes Ozwell)" : "not enrolled — gate off (anyone can wake)") +
+            "</span><div id='sv-status' style='margin:.3em 0;min-height:1.3em;color:#ffd60a'></div>";
+        const row = document.createElement("div");
+        const enrollBtn = document.createElement("button");
+        enrollBtn.textContent = "Enroll doctor voice (3×)"; enrollBtn.style = SV_BTN;
+        enrollBtn.onclick = () => enrollDoctor(enrollBtn);
+        const clearBtn = document.createElement("button");
+        clearBtn.textContent = "Clear"; clearBtn.style = SV_BTN + ";margin-left:.5em;border-color:#27aae1";
+        clearBtn.onclick = () => { if (window.SpeakerVerify) window.SpeakerVerify.clearEnrollment(); renderSvPanel(); };
+        row.appendChild(enrollBtn); row.appendChild(clearBtn);
+        svPanel.appendChild(row);
+    }
+
+    // Dedicated short recorder for enrollment (own mic stream, independent of hey-buddy's).
+    let svAudioCtx, svStream, svSource;
+    async function svRecord(secs) {
+        if (!svStream) {
+            svStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            svAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            svSource = svAudioCtx.createMediaStreamSource(svStream);
+        }
+        if (svAudioCtx.state === "suspended") await svAudioCtx.resume();
+        const proc = svAudioCtx.createScriptProcessor(4096, 1, 1);
+        const sink = svAudioCtx.createGain(); sink.gain.value = 0; // mute -> no feedback
+        const chunks = [];
+        proc.onaudioprocess = (e) => chunks.push(Float32Array.from(e.inputBuffer.getChannelData(0)));
+        svSource.connect(proc); proc.connect(sink); sink.connect(svAudioCtx.destination);
+        await svSleep(secs * 1000);
+        svSource.disconnect(proc); proc.disconnect(); sink.disconnect();
+        let len = 0; for (const c of chunks) len += c.length;
+        const out = new Float32Array(len); let o = 0; for (const c of chunks) { out.set(c, o); o += c.length; }
+        return { samples: out, sampleRate: svAudioCtx.sampleRate };
+    }
+
+    async function enrollDoctor(btn) {
+        const sv = window.SpeakerVerify;
+        if (!sv) return;
+        btn.disabled = true; window.__ozEnrollActive = true; // suppress wake drives while enrolling
+        const st = () => document.getElementById("sv-status");
+        try {
+            st().textContent = "loading verifier…"; await sv.ready();
+            const clips = [];
+            for (let i = 1; i <= 3; i++) {
+                for (let c = 3; c >= 1; c--) { st().textContent = `sample ${i}/3 — say “hey ozwell” in ${c}…`; await svSleep(600); }
+                st().innerHTML = `🔴 sample ${i}/3 — <b>say “hey ozwell” now</b>`;
+                clips.push(await svRecord(1.6));
+                st().textContent = "✓ got it"; await svSleep(400);
+            }
+            sv.enroll(clips);
+            st().textContent = "✅ enrolled — only your voice will wake Ozwell now.";
+        } catch (e) {
+            st().textContent = "error: " + e;
+        } finally {
+            window.__ozEnrollActive = false; btn.disabled = false; renderSvPanel();
+        }
+    }
+
+    renderSvPanel();
+    document.body.insertBefore(svPanel, document.body.firstChild);
+    // ===========================================================================
 
     // ===================== Voice enrollment (POC) ==============================
     // Per-user layer on top of the general model: record each phrase a few times, store
