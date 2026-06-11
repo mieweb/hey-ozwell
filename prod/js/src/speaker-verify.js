@@ -62,13 +62,24 @@
   }
   function cosine(a, b) { let d = 0; const n = Math.min(a.length, b.length); for (let i = 0; i < n; i++) d += a[i] * b[i]; return d; } // both L2-normalized
 
-  // --- enrollment storage (centroid of the doctor's embeddings; vectors, not audio) ---
-  function loadEnrollment() {
-    try { const o = JSON.parse(localStorage.getItem(LS_KEY) || "null"); return o && o.centroid ? { centroid: Float32Array.from(o.centroid), n: o.n || 1 } : null; }
-    catch (e) { return null; }
+  // --- enrollment storage: PER-PHRASE centroids of the doctor's embeddings (vectors, not
+  // audio). Per-phrase because on a ~1s clip a speaker embedding still carries a little of
+  // WHAT was said, so the doctor's "hey ozwell" centroid scores their "ozwell i'm done"
+  // too low. We enroll + gate each phrase against its own centroid. ---
+  function loadAll() {
+    try {
+      const o = JSON.parse(localStorage.getItem(LS_KEY) || "{}") || {};
+      // Ignore the old single-centroid format ({centroid, n}) from earlier builds.
+      if (o && Array.isArray(o.centroid)) return {};
+      return o;
+    } catch (e) { return {}; }
   }
-  function saveEnrollment(centroid, n) {
-    try { localStorage.setItem(LS_KEY, JSON.stringify({ centroid: Array.from(centroid), n })); } catch (e) { console.warn("SV save failed", e); }
+  function saveAll(obj) {
+    try { localStorage.setItem(LS_KEY, JSON.stringify(obj)); } catch (e) { console.warn("SV save failed", e); }
+  }
+  function loadCentroid(phrase) {
+    const o = loadAll()[phrase];
+    return o && o.centroid ? { centroid: Float32Array.from(o.centroid), n: o.n || 1 } : null;
   }
 
   const SpeakerVerify = {
@@ -77,34 +88,38 @@
     threshold: DEFAULT_THRESHOLD,
     embeddingDim: () => dim,
 
-    /** Enroll the doctor from N captured utterances → store the mean (centroid). */
-    enroll(utterances /* [{samples, sampleRate}] */) {
+    /** Enroll the doctor for a SPECIFIC phrase from N utterances → store that phrase's centroid. */
+    enroll(phrase, utterances /* [{samples, sampleRate}] */) {
       if (!handle) throw new Error("SpeakerVerify not ready");
       const embs = utterances.map(u => embed(u.samples, u.sampleRate));
       const c = new Float32Array(dim);
       for (const e of embs) for (let i = 0; i < dim; i++) c[i] += e[i];
       for (let i = 0; i < dim; i++) c[i] /= embs.length;
       l2normalize(c);
-      saveEnrollment(c, embs.length);
+      const all = loadAll(); all[phrase] = { centroid: Array.from(c), n: embs.length }; saveAll(all);
       return { n: embs.length };
     },
 
-    /** Verify a live utterance against the enrolled doctor. Returns {score, pass, enrolled}. */
-    verify(samples, sampleRate) {
-      const enr = loadEnrollment();
+    /** Verify a live utterance for `phrase` against that phrase's centroid. {score, pass, enrolled}. */
+    verify(phrase, samples, sampleRate) {
+      const enr = loadCentroid(phrase);
       if (!enr) return { score: 0, pass: false, enrolled: false };
       const live = embed(samples, sampleRate);
       const score = cosine(live, enr.centroid);
       return { score, pass: score >= SpeakerVerify.threshold, enrolled: true };
     },
 
-    hasEnrollment: () => !!loadEnrollment(),
+    // hasEnrollment(phrase) -> is that phrase enrolled; hasEnrollment() -> is anything enrolled.
+    hasEnrollment: (phrase) => phrase ? !!loadAll()[phrase] : Object.keys(loadAll()).length > 0,
+    enrolledPhrases: () => Object.keys(loadAll()),
     clearEnrollment: () => { try { localStorage.removeItem(LS_KEY); } catch (e) {} },
   };
 
   async function init() {
     try {
-      window.Module = {}; // the emscripten glue augments this global
+      // locateFile: the page is at "/" but the glue + .wasm/.data live in SV_DIR, so
+      // tell emscripten exactly where to fetch them (otherwise it 404s and init hangs).
+      window.Module = { locateFile: (path) => SV_DIR + "/" + path };
       const onRuntime = new Promise((res) => { window.Module.onRuntimeInitialized = res; });
       // order matters: config-marshaling helper, then the glue (which fires onRuntimeInitialized)
       await loadScript(SV_DIR + "/sherpa-onnx-speaker-diarization.js");

@@ -139,7 +139,17 @@ document.addEventListener("DOMContentLoaded", async () => {
         const audioElement = blobToAudio(audioBlob);
         audioContainer.innerHTML = "";
         audioContainer.appendChild(audioElement);
-        // We finally have the wake utterance — run the speaker-verification gate on it.
+        // Enrollment capture mode: route this utterance to the enroller (same audio path as
+        // verification). Only accept it if the wake that fired matches the phrase we asked for.
+        if (svCapture) {
+            const target = svCapture.targetName, r = svCapture.resolve;
+            const firedName = pendingWake ? pendingWake.name : null;
+            pendingWake = null; svCapture = null;
+            // matched phrase -> capture; a DIFFERENT wake -> reject immediately (no waiting).
+            r(firedName === target ? { audio: audioSamples } : { wrong: firedName });
+            return;
+        }
+        // Otherwise: run the speaker-verification gate on the wake utterance.
         runWakeGate(audioSamples);
     });
 
@@ -184,34 +194,44 @@ document.addEventListener("DOMContentLoaded", async () => {
     // can verify the speaker first. Anyone can trigger the wake word; only the enrolled
     // doctor's voice acts on it.
     let pendingWake = null;
+    let svCapture = null; // { targetName, resolve } while enrollment is waiting for an utterance
     heyBuddy.onDetected("hey-ozwell", () => {
-        pendingWake = { content: "Hey Ozwell — a clinician just started a session.",
+        pendingWake = { name: "hey-ozwell", content: "Hey Ozwell — a clinician just started a session.",
                         label: "🔔 <b>“hey ozwell” detected</b>" };
     });
     heyBuddy.onDetected("ozwell-i'm-done", () => {
-        pendingWake = { content: "Ozwell, I'm done — please wrap up and summarize the session.",
+        pendingWake = { name: "ozwell-i'm-done", content: "Ozwell, I'm done — please wrap up and summarize the session.",
                         label: "🛑 <b>“ozwell i'm done” detected</b>" };
     });
 
-    // Called from onRecording with the captured wake utterance (16 kHz).
+    // Called from onRecording with the captured wake utterance (16 kHz). Verifies the
+    // speaker against THIS phrase's enrolled centroid before acting.
     function runWakeGate(audioSamples) {
         if (!pendingWake || window.__ozEnrollActive) { pendingWake = null; return; }
-        const { content, label } = pendingWake; pendingWake = null;
+        const { content, label, name } = pendingWake; pendingWake = null;
         const sv = window.SpeakerVerify;
-        if (sv && sv.isLoaded() && sv.hasEnrollment()) {
-            // Gate ACTIVE: cosine-match the utterance against the enrolled doctor centroid.
-            const { score, pass } = sv.verify(audioSamples, 16000);
-            if (pass) {
-                driveOzwell(content, `${label} → ✅ <b>doctor verified</b> (${score.toFixed(2)}) → opening Ozwell…`);
-            } else {
-                integ.innerHTML = `${label} → 🔒 <b>not the enrolled doctor</b> (match ${score.toFixed(2)}) — ignored`;
-            }
-        } else {
-            // Gate OFF (no doctor enrolled yet, or verifier still loading): behave as before.
-            const note = (sv && sv.hasEnrollment())
-                ? " <span style='color:#9fb6cc'>(verifier still loading…)</span>"
-                : " <span style='color:#9fb6cc'>(no doctor enrolled — gate off)</span>";
-            driveOzwell(content, `${label} → opening Ozwell…${note}`);
+        const v = (sv && sv.isLoaded() && sv.hasEnrollment(name)) ? sv.verify(name, audioSamples, 16000) : null;
+        const tag = v ? ` (${v.score.toFixed(2)})` : "";
+
+        // During an active dictation session, only a verified "ozwell i'm done" ends it.
+        if (sessionActive) {
+            if (name === "ozwell-i'm-done" && v && v.pass) stopAndTranscribe(true); // strip stop phrase from text
+            else showSessionUI(); // keep the recording UI + Stop button visible
+            return;
+        }
+
+        // Gate: if this phrase is enrolled, require the doctor; otherwise the gate is off.
+        if (v && !v.pass) {
+            integ.innerHTML = `${label} → 🔒 <b>not the enrolled doctor</b> (match${tag}) — ignored`;
+            return;
+        }
+        if (name === "hey-ozwell") {
+            // START a dictation session: open Ozwell and record until "ozwell i'm done"/Stop.
+            integ.innerHTML = `${label} → ✅ <b>verified${tag}</b> → starting dictation…`;
+            OzwellChat.open();
+            startSession();
+        } else { // stop phrase but no session running — nothing to end, don't inject anything
+            integ.innerHTML = `${label} → ✅ verified${tag} — no active dictation`;
         }
     }
     // ---------------------------------------------------------------------------
@@ -228,15 +248,17 @@ document.addEventListener("DOMContentLoaded", async () => {
                     "font-family:monospace;color:#cde;background:#0b1622;line-height:1.6";
     function renderSvPanel() {
         const sv = window.SpeakerVerify;
-        const enrolled = sv && sv.hasEnrollment();
+        const enrolledList = sv ? sv.enrolledPhrases() : [];
         svPanel.innerHTML =
             "<b>🩺 Doctor speaker-ID</b> — gate the wake word to <i>your</i> voice only.<br>" +
             "<span style='color:#9fb6cc'>Status: " +
-            (enrolled ? "enrolled ✅ — gate ON (only your voice wakes Ozwell)" : "not enrolled — gate off (anyone can wake)") +
+            (enrolledList.length
+                ? "enrolled ✅ (" + enrolledList.join(", ") + ") — gate ON for those phrases"
+                : "not enrolled — gate off (anyone can wake)") +
             "</span><div id='sv-status' style='margin:.3em 0;min-height:1.3em;color:#ffd60a'></div>";
         const row = document.createElement("div");
         const enrollBtn = document.createElement("button");
-        enrollBtn.textContent = "Enroll doctor voice (3×)"; enrollBtn.style = SV_BTN;
+        enrollBtn.textContent = "Enroll doctor voice"; enrollBtn.style = SV_BTN;
         enrollBtn.onclick = () => enrollDoctor(enrollBtn);
         const clearBtn = document.createElement("button");
         clearBtn.textContent = "Clear"; clearBtn.style = SV_BTN + ";margin-left:.5em;border-color:#27aae1";
@@ -245,25 +267,19 @@ document.addEventListener("DOMContentLoaded", async () => {
         svPanel.appendChild(row);
     }
 
-    // Dedicated short recorder for enrollment (own mic stream, independent of hey-buddy's).
-    let svAudioCtx, svStream, svSource;
-    async function svRecord(secs) {
-        if (!svStream) {
-            svStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            svAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            svSource = svAudioCtx.createMediaStreamSource(svStream);
-        }
-        if (svAudioCtx.state === "suspended") await svAudioCtx.resume();
-        const proc = svAudioCtx.createScriptProcessor(4096, 1, 1);
-        const sink = svAudioCtx.createGain(); sink.gain.value = 0; // mute -> no feedback
-        const chunks = [];
-        proc.onaudioprocess = (e) => chunks.push(Float32Array.from(e.inputBuffer.getChannelData(0)));
-        svSource.connect(proc); proc.connect(sink); sink.connect(svAudioCtx.destination);
-        await svSleep(secs * 1000);
-        svSource.disconnect(proc); proc.disconnect(); sink.disconnect();
-        let len = 0; for (const c of chunks) len += c.length;
-        const out = new Float32Array(len); let o = 0; for (const c of chunks) { out.set(c, o); o += c.length; }
-        return { samples: out, sampleRate: svAudioCtx.sampleRate };
+    // Samples per phrase. 2 = robust-but-quick (averages out a bad sample); flip to 1 for a
+    // snappy demo take, or 3 for max robustness.
+    const SV_N_ENROLL = 2;
+
+    // Enrollment captures the doctor's wake utterance through hey-buddy's OWN recording path
+    // (onRecording) — the SAME path used at verification — so the embeddings actually match.
+    // (Recording enrollment on a separate mic at a different rate made even the same voice
+    // score ~0.46.) The matching wake must fire to capture, which doubles as the phrase check.
+    function captureWakeUtterance(targetName, timeoutMs = 3000) {
+        return new Promise((resolve) => {
+            svCapture = { targetName, resolve };
+            setTimeout(() => { if (svCapture && svCapture.resolve === resolve) { svCapture = null; resolve(null); } }, timeoutMs);
+        });
     }
 
     async function enrollDoctor(btn) {
@@ -273,15 +289,19 @@ document.addEventListener("DOMContentLoaded", async () => {
         const st = () => document.getElementById("sv-status");
         try {
             st().textContent = "loading verifier…"; await sv.ready();
-            const clips = [];
-            for (let i = 1; i <= 3; i++) {
-                for (let c = 3; c >= 1; c--) { st().textContent = `sample ${i}/3 — say “hey ozwell” in ${c}…`; await svSleep(600); }
-                st().innerHTML = `🔴 sample ${i}/3 — <b>say “hey ozwell” now</b>`;
-                clips.push(await svRecord(1.6));
-                st().textContent = "✓ got it"; await svSleep(400);
+            for (const ph of ENROLL_PHRASES) {
+                const clips = [];
+                while (clips.length < SV_N_ENROLL) {
+                    st().innerHTML = `🗣️ <b>say “${ph.label}”</b> &nbsp;<span style='color:#9fb6cc'>(sample ${clips.length + 1}/${SV_N_ENROLL})</span>`;
+                    const res = await captureWakeUtterance(ph.name);
+                    if (!res) { st().innerHTML = `⏳ didn’t catch “${ph.label}” — say it again, clearly`; await svSleep(700); continue; }
+                    if (res.wrong) { st().innerHTML = `❌ that was the other phrase — please say “${ph.label}”`; await svSleep(900); continue; }
+                    clips.push({ samples: res.audio, sampleRate: 16000 });
+                    st().textContent = "✓ got it"; await svSleep(1200); // let the ~2s wake cooldown pass before the next
+                }
+                sv.enroll(ph.name, clips);
             }
-            sv.enroll(clips);
-            st().textContent = "✅ enrolled — only your voice will wake Ozwell now.";
+            st().textContent = "✅ enrolled both phrases — only your voice wakes Ozwell now.";
         } catch (e) {
             st().textContent = "error: " + e;
         } finally {
@@ -291,6 +311,64 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     renderSvPanel();
     document.body.insertBefore(svPanel, document.body.firstChild);
+    // ===========================================================================
+
+    // ============== On-device dictation SESSION (Whisper) ======================
+    // "hey ozwell" (verified) starts a session: record continuously until "ozwell i'm done"
+    // (verified) or the Stop button, then transcribe the whole thing in-browser (audio never
+    // leaves the page) and send the text to Ozwell. Transformers.js chunks long audio, so a
+    // multi-minute session is fine.
+    let cmdAudioCtx, cmdStream, cmdSource;
+    let sessionActive = false, sessionProc = null, sessionSink = null, sessionChunks = [];
+
+    async function startSession() {
+        if (sessionActive) return;
+        if (!cmdStream) {
+            cmdStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            cmdAudioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+            cmdSource = cmdAudioCtx.createMediaStreamSource(cmdStream);
+        }
+        if (cmdAudioCtx.state === "suspended") await cmdAudioCtx.resume();
+        sessionChunks = [];
+        sessionProc = cmdAudioCtx.createScriptProcessor(4096, 1, 1);
+        sessionSink = cmdAudioCtx.createGain(); sessionSink.gain.value = 0; // mute -> no feedback
+        sessionProc.onaudioprocess = (e) => sessionChunks.push(Float32Array.from(e.inputBuffer.getChannelData(0)));
+        cmdSource.connect(sessionProc); sessionProc.connect(sessionSink); sessionSink.connect(cmdAudioCtx.destination);
+        sessionActive = true;
+        showSessionUI();
+    }
+
+    function showSessionUI() {
+        integ.innerHTML = `🎤 <b>dictating…</b> say <b>“ozwell i'm done”</b> when finished &nbsp;` +
+            `<button id="oz-stop" style="${SV_BTN};border-color:#ff5a5a">⏹ Stop</button>`;
+        const b = document.getElementById("oz-stop");
+        if (b) b.onclick = () => stopAndTranscribe();
+    }
+
+    async function stopAndTranscribe(stripStop) {
+        if (!sessionActive) return;
+        sessionActive = false;
+        try { cmdSource.disconnect(sessionProc); sessionProc.disconnect(); sessionSink.disconnect(); } catch (e) {}
+        let len = 0; for (const c of sessionChunks) len += c.length;
+        const samples = new Float32Array(len); let o = 0; for (const c of sessionChunks) { samples.set(c, o); o += c.length; }
+        let peak = 0; for (let i = 0; i < samples.length; i++) { const a = Math.abs(samples[i]); if (a > peak) peak = a; }
+        const secs = (len / 16000).toFixed(1);
+        console.log(`[dictate] session ${secs}s, ${len} samples, peak ${peak.toFixed(3)}`);
+        const w = window.Whisper;
+        if (!w || peak < 0.01) {
+            integ.innerHTML = `🎤 session ended (${secs}s) — ${peak < 0.01 ? "no audio captured" : "transcription unavailable"}`;
+            return;
+        }
+        integ.innerHTML = `🎤 <b>transcribing ${secs}s on-device…</b>` + (w.isLoaded() ? "" : " <span style='color:#9fb6cc'>(loading model, first time)</span>");
+        try {
+            let text = (await w.transcribe(samples, 16000)).replace(/\[BLANK_AUDIO\]/gi, "").trim();
+            // Ended by voice: strip a trailing "ozwell i'm done" from the TEXT (precise — keeps
+            // real words a blind audio trim would eat). Button stop passes false.
+            if (stripStop) text = text.replace(/[\s,]*(\bozwell\b[\s,]*)?i['’]?m\s+done[\s.!?,]*$/i, "").trim();
+            if (text) { integ.innerHTML = `🗣️ <b>“${text}”</b> → sent to Ozwell`; sendToWidget(text); }
+            else { integ.innerHTML = "🗣️ (no speech recognized)"; }
+        } catch (e) { integ.innerHTML = `transcription error: ${e}`; }
+    }
     // ===========================================================================
 
     // ===================== Voice enrollment (POC) ==============================
@@ -393,8 +471,14 @@ document.addEventListener("DOMContentLoaded", async () => {
         row.appendChild(enrollBtn); row.appendChild(clearBtn);
         ePanel.appendChild(row);
     }
-    renderPanel();
-    document.body.insertBefore(ePanel, document.body.firstChild);
+    // NOTE: the old content-voiceprint POC panel is HIDDEN on this (speaker-verification)
+    // branch to keep the demo to one clear panel. The boost logic still exists; only its UI
+    // is suppressed. The full voiceprint POC lives on branch jlocala/voice-enrollment.
+    const SHOW_CONTENT_VOICEPRINT_PANEL = false;
+    if (SHOW_CONTENT_VOICEPRINT_PANEL) {
+        renderPanel();
+        document.body.insertBefore(ePanel, document.body.firstChild);
+    }
 
     // live similarity readout (helps tune the match threshold)
     setInterval(() => {
