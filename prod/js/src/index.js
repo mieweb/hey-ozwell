@@ -355,6 +355,23 @@ document.addEventListener("DOMContentLoaded", async () => {
         integ.innerHTML = `🎤 <b>dictating…</b> say <b>“ozwell i'm done”</b> when you're finished`;
     }
 
+    // The stop phrase "ozwell i'm done" is always the final utterance, but Whisper renders the
+    // made-up word "ozwell" inconsistently (Ozwell / All's well / Alls well / As well / Oswald)
+    // and sometimes drops "I'm done". Strip those trailing variants from the transcript.
+    function stripStopPhrase(text) {
+        // Peel the stop phrase off the end. Two problems Whisper causes: (1) it renders the
+        // made-up "ozwell" inconsistently (Ozwell / All's well / Alls well / As well / Oswald)
+        // and writes "i'm done" as "I am done"; (2) when the stop phrase is QUIET it doesn't
+        // transcribe it at all and instead hallucinates filler ("that's all", "that was all",
+        // "thank you", "bye"). So we repeatedly strip any of those from the END, one at a time,
+        // until the tail is clean. Bare "as well" is intentionally NOT peeled alone (too common
+        // as real speech) — only when it's joined to "i'm done".
+        const tail = /(?:\b(?:oz\s*well|all['’]?s?\s*well|as\s*well|oswald)\b\s*,?\s*i(?:['’]?m|\s+am)\s+done\b|\b(?:oz\s*well|all['’]?s\s*well|oswald)\b|\bi(?:['’]?m|\s+am)\s+done\b|\bthat['’]?s?\s+(?:was\s+)?all\b|\bthank(?:s|\s+you)(?:\s+for\s+watching)?\b|\bbye\b)[\s.,!?-]*$/i;
+        let prev = null;
+        while (text !== prev && text) { prev = text; text = text.replace(tail, "").replace(/[\s.,!?-]+$/, ""); }
+        return text.trim();
+    }
+
     async function stopAndTranscribe(stripStop) {
         if (!sessionActive) return;
         sessionActive = false;
@@ -372,9 +389,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         integ.innerHTML = `🎤 <b>transcribing ${secs}s on-device…</b>` + (w.isLoaded() ? "" : " <span style='color:#9fb6cc'>(loading model, first time)</span>");
         try {
             let text = (await w.transcribe(samples, 16000)).replace(/\[BLANK_AUDIO\]/gi, "").trim();
-            // Ended by voice: strip a trailing "ozwell i'm done" from the TEXT (precise — keeps
-            // real words a blind audio trim would eat). Silence auto-stop passes false.
-            if (stripStop) text = text.replace(/[\s,]*(\bozwell\b[\s,]*)?i['’]?m\s+done[\s.!?,]*$/i, "").trim();
+            // Ended by voice: strip the trailing stop phrase from the TEXT (precise — keeps real
+            // words a blind audio trim would eat). Silence auto-stop passes false.
+            if (stripStop) text = stripStopPhrase(text);
             if (text) { integ.innerHTML = `🗣️ <b>“${text}”</b> → sent to Ozwell`; sendToWidget(text); }
             else { integ.innerHTML = "🗣️ (no speech recognized)"; }
         } catch (e) { integ.innerHTML = `transcription error: ${e}`; }
