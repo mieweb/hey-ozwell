@@ -2,36 +2,50 @@
 // browser (WebGPU, or single-threaded WASM fallback) — audio never leaves the page (PHI).
 // Exposes window.Whisper.{ ready, isLoaded, transcribe, modelName }.
 //
-// Loaded as a module from index.html. First load downloads the model (~240MB for small.en),
-// cached by the browser afterward.
+// Loaded as a module from index.html. First load downloads the model (cached afterward).
 import { pipeline, env } from "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3";
 
 // Single-threaded WASM avoids SharedArrayBuffer (the demo page has no COOP/COEP headers).
 env.backends.onnx.wasm.numThreads = 1;
 env.allowLocalModels = false;
 
-// Accuracy-leaning English model. Swap to "onnx-community/whisper-large-v3-turbo" (bigger,
-// WebGPU strongly recommended) for max accuracy, or "Xenova/whisper-base.en" for speed.
-const MODEL = "Xenova/whisper-small.en";
+// Accuracy-first DEFAULT on WebGPU: large-v3-turbo (near-large-v3 accuracy, much faster;
+// ~800MB, needs a GPU). It's multilingual, so transcribe() pins it to English.
+const TURBO_MODEL = "onnx-community/whisper-large-v3-turbo"; // strong — default
+const SMALL_MODEL = "Xenova/whisper-small.en";              // light/fast — for quick dev reloads
 
-let transcriber = null, readyResolve, readyReject;
+// Dev toggle: append ?model=small to the URL to use the light model (fast warmup); default
+// is the strong model. small.en is also the automatic fallback if the big model won't load.
+const wantSmall = /^(small|fast)$/i.test(new URLSearchParams(location.search).get("model") || "");
+
+let transcriber = null, isMultilingual = false, readyResolve, readyReject;
 const readyPromise = new Promise((res, rej) => { readyResolve = res; readyReject = rej; });
 
+async function loadSmall(reason) {
+  try { transcriber = await pipeline("automatic-speech-recognition", SMALL_MODEL, { device: "webgpu" }); }
+  catch (e) { transcriber = await pipeline("automatic-speech-recognition", SMALL_MODEL); } // WASM
+  isMultilingual = false;
+  console.log(`[Whisper] loaded ${SMALL_MODEL}${reason ? " (" + reason + ")" : ""}`);
+}
+
 async function init() {
-  try {
+  if (wantSmall) {
+    await loadSmall("?model=small");
+  } else {
     try {
-      transcriber = await pipeline("automatic-speech-recognition", MODEL, { device: "webgpu" });
-      console.log("[Whisper] loaded on WebGPU:", MODEL);
+      // fp16 encoder keeps accuracy; q4 decoder keeps it fast on WebGPU.
+      transcriber = await pipeline("automatic-speech-recognition", TURBO_MODEL, {
+        device: "webgpu",
+        dtype: { encoder_model: "fp16", decoder_model_merged: "q4" },
+      });
+      isMultilingual = true;
+      console.log("[Whisper] loaded on WebGPU:", TURBO_MODEL, "— append ?model=small for fast dev reloads");
     } catch (e) {
-      console.warn("[Whisper] WebGPU unavailable — falling back to WASM (slower).", e);
-      transcriber = await pipeline("automatic-speech-recognition", MODEL);
-      console.log("[Whisper] loaded on WASM:", MODEL);
+      console.warn("[Whisper] large model failed to load — falling back to small.en.", e);
+      await loadSmall("fallback");
     }
-    readyResolve();
-  } catch (e) {
-    console.error("[Whisper] failed to load:", e);
-    readyReject(e);
   }
+  readyResolve();
 }
 
 function resampleTo16k(x, sr) {
@@ -48,12 +62,16 @@ function resampleTo16k(x, sr) {
 window.Whisper = {
   ready: () => readyPromise,
   isLoaded: () => transcriber !== null,
-  modelName: () => MODEL,
+  modelName: () => (isMultilingual ? TURBO_MODEL : SMALL_MODEL),
   // samples: Float32Array; returns the transcribed text (on-device).
   async transcribe(samples, sampleRate) {
     await readyPromise;
     const audio = resampleTo16k(samples, sampleRate); // whisper wants 16kHz mono
-    const out = await transcriber(audio);
+    // chunk_length_s lets it handle multi-minute sessions (>30s). Pin language for the
+    // multilingual model so it doesn't auto-detect or translate.
+    const opts = { chunk_length_s: 30, stride_length_s: 5 };
+    if (isMultilingual) { opts.language = "english"; opts.task = "transcribe"; }
+    const out = await transcriber(audio, opts);
     return (out && out.text ? out.text : "").trim();
   },
 };

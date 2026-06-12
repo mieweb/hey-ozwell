@@ -198,6 +198,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     heyBuddy.onDetected("hey-ozwell", () => {
         pendingWake = { name: "hey-ozwell", content: "Hey Ozwell — a clinician just started a session.",
                         label: "🔔 <b>“hey ozwell” detected</b>" };
+        // Instant feedback that the wake word registered (the verify + "dictating" cue follows
+        // a beat later, once you pause). So you're never left wondering if it heard you.
+        if (!sessionActive && !window.__ozEnrollActive && !svCapture) {
+            integ.innerHTML = `🔔 <b>heard “hey ozwell”</b> — pause a beat, then talk…`;
+        }
     });
     heyBuddy.onDetected("ozwell-i'm-done", () => {
         pendingWake = { name: "ozwell-i'm-done", content: "Ozwell, I'm done — please wrap up and summarize the session.",
@@ -229,6 +234,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             // START a dictation session: open Ozwell and record until "ozwell i'm done"/Stop.
             integ.innerHTML = `${label} → ✅ <b>verified${tag}</b> → starting dictation…`;
             OzwellChat.open();
+            beep(880); // "go" chime — session is live, start dictating now
             startSession();
         } else { // stop phrase but no session running — nothing to end, don't inject anything
             integ.innerHTML = `${label} → ✅ verified${tag} — no active dictation`;
@@ -366,7 +372,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         // "thank you", "bye"). So we repeatedly strip any of those from the END, one at a time,
         // until the tail is clean. Bare "as well" is intentionally NOT peeled alone (too common
         // as real speech) — only when it's joined to "i'm done".
-        const tail = /(?:\b(?:oz\s*well|all['’]?s?\s*well|as\s*well|oswald)\b\s*,?\s*i(?:['’]?m|\s+am)\s+done\b|\b(?:oz\s*well|all['’]?s\s*well|oswald)\b|\bi(?:['’]?m|\s+am)\s+done\b|\bthat['’]?s?\s+(?:was\s+)?all\b|\bthank(?:s|\s+you)(?:\s+for\s+watching)?\b|\bbye\b)[\s.,!?-]*$/i;
+        const tail = /(?:\b(?:oz\s*well|all['’]?s?\s*well|as\s*well|oswald)\b\s*,?\s*i(?:['’]?m|\s+am)\s+done\b|\b(?:oz\s*well|all['’]?s\s*well|oswald)\b|\bi(?:['’]?m|\s+am)\s+done\b|\b(?:that\s+was\s+|was\s+)?well\s+done\b|\bthat['’]?s?\s+(?:was\s+)?all\b|\bthank(?:s|\s+you)(?:\s+for\s+watching)?\b|\bbye\b)[\s.,!?-]*$/i;
         let prev = null;
         while (text !== prev && text) { prev = text; text = text.replace(tail, "").replace(/[\s.,!?-]+$/, ""); }
         return text.trim();
