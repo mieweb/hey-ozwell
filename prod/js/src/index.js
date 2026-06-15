@@ -213,9 +213,35 @@ document.addEventListener("DOMContentLoaded", async () => {
                         label: "🛑 <b>“ozwell i'm done” detected</b>" };
     });
 
+    // Stage-2 verifier: does the Whisper transcript of the wake buffer actually match the phrase?
+    // Whisper hears "ozwell" as "as well"/"oz well"/"oswell", so we list variants and fuzzy-match
+    // (Levenshtein ratio). Validated offline on real audio: rejects 11/11 random false-fires, keeps
+    // every real detection. Kills false wakes on the doctor's OWN conversation (which pass speaker-
+    // verify because it's their voice) — e.g. the stray "*pain*"/"Azul" snippets that leaked through.
+    const WAKE_TARGETS = {
+        "hey-ozwell": ["hey ozwell", "hey oz well", "hey as well", "hey oswell", "hey oswald"],
+        "ozwell-i'm-done": ["ozwell i'm done", "oz well i'm done", "as well i'm done", "oswell i'm done", "ozwell im done", "oswald i'm done"],
+    };
+    function wakePhraseMatches(text, name) {
+        const targets = WAKE_TARGETS[name];
+        if (!targets) return true;
+        const norm = (text || "").toLowerCase().replace(/[^a-z' ]/g, " ").replace(/\s+/g, " ").trim();
+        const sim = (a, b) => {
+            const m = a.length, n = b.length;
+            if (!m && !n) return 1;
+            const d = Array.from({ length: n + 1 }, (_, j) => j);
+            for (let i = 1; i <= m; i++) {
+                let p = d[0]; d[0] = i;
+                for (let j = 1; j <= n; j++) { const t = d[j]; d[j] = Math.min(d[j] + 1, d[j - 1] + 1, p + (a[i - 1] === b[j - 1] ? 0 : 1)); p = t; }
+            }
+            return 1 - d[n] / Math.max(m, n);
+        };
+        return targets.some((t) => sim(norm, t) >= 0.6);
+    }
+
     // Called from onRecording with the captured wake utterance (16 kHz). Verifies the
     // speaker against THIS phrase's enrolled centroid before acting.
-    function runWakeGate(audioSamples) {
+    async function runWakeGate(audioSamples) {
         if (!pendingWake || window.__ozEnrollActive) { pendingWake = null; return; }
         const { content, label, name } = pendingWake; pendingWake = null;
         const sv = window.SpeakerVerify;
@@ -227,6 +253,22 @@ document.addEventListener("DOMContentLoaded", async () => {
             console.log(`[latency] ${name}: wake-frame ~${heyBuddy.frameTimeEma.toFixed(0)}ms | speaker-verify ${(performance.now() - t0).toFixed(0)}ms | score ${v.score.toFixed(2)} pass ${v.pass}`);
         }
         const tag = v ? ` (${v.score.toFixed(2)})` : "";
+
+        // STAGE-2 (wake-phrase re-check): speaker-verify confirms WHO spoke, but the doctor's own
+        // conversation still false-fires (it's their voice → it passes). So re-check WHAT was said:
+        // transcribe the wake buffer with the already-loaded Whisper and require it to match the
+        // phrase. Reuses on-device Whisper (no extra model). Fails OPEN if Whisper isn't ready yet.
+        if (window.Whisper && window.Whisper.isLoaded()) {
+            let heard = "";
+            try { heard = (await window.Whisper.transcribe(audioSamples, 16000) || "").trim(); }
+            catch (e) { console.warn("[stage-2] whisper error (failing open):", e); }
+            if (heard && !wakePhraseMatches(heard, name)) {
+                integ.innerHTML = `${label} → 🛑 <b>not the wake phrase</b> (“${heard}”) — ignored`;
+                console.log(`🛑 stage-2 rejected ${name}: "${heard}"`);
+                return;
+            }
+            if (heard) console.log(`✅ stage-2 confirmed ${name}: "${heard}"`);
+        }
 
         // During an active dictation session, only a verified "ozwell i'm done" ends it.
         if (sessionActive) {
