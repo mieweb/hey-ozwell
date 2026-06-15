@@ -224,14 +224,19 @@ document.addEventListener("DOMContentLoaded", async () => {
             const t0 = performance.now();
             v = sv.verify(name, audioSamples, 16000);
             // [latency] wake-detection per-frame compute (the <250ms target) + one-shot speaker verify
-            console.log(`[latency] ${name}: wake-frame ~${heyBuddy.frameTimeEma.toFixed(0)}ms | speaker-verify ${(performance.now() - t0).toFixed(0)}ms`);
+            console.log(`[latency] ${name}: wake-frame ~${heyBuddy.frameTimeEma.toFixed(0)}ms | speaker-verify ${(performance.now() - t0).toFixed(0)}ms | score ${v.score.toFixed(2)} pass ${v.pass}`);
         }
         const tag = v ? ` (${v.score.toFixed(2)})` : "";
 
         // During an active dictation session, only a verified "ozwell i'm done" ends it.
         if (sessionActive) {
-            if (name === "ozwell-i'm-done" && v && v.pass) stopAndTranscribe(true); // strip stop phrase from text
-            else showSessionUI(); // keep the recording UI + Stop button visible
+            if (name === "ozwell-i'm-done" && v && v.pass) {
+                // Trim the measured stop utterance (minus a 0.6s safety margin) off the audio so
+                // Whisper barely sees the stop phrase; the text-stripper cleans any fragment. The
+                // margin keeps alignment slop on the safe side. (Chosen over text-only after testing.)
+                const trimSamples = Math.max(0, audioSamples.length - Math.round(0.6 * 16000));
+                stopAndTranscribe(true, trimSamples);
+            } else showSessionUI();
             return;
         }
 
@@ -382,18 +387,23 @@ document.addEventListener("DOMContentLoaded", async () => {
         // "thank you", "bye"). So we repeatedly strip any of those from the END, one at a time,
         // until the tail is clean. Bare "as well" is intentionally NOT peeled alone (too common
         // as real speech) — only when it's joined to "i'm done".
-        const tail = /(?:\b(?:oz\s*well|all['’]?s?\s*well|as\s*well|oswald)\b\s*,?\s*i(?:['’]?m|\s+am)\s+done\b|\b(?:oz\s*well|all['’]?s\s*well|oswald)\b|\bi(?:['’]?m|\s+am)\s+done\b|\b(?:that\s+was\s+|was\s+)?well\s+done\b|\bthat['’]?s?\s+(?:was\s+)?all\b|\bthank(?:s|\s+you)(?:\s+for\s+watching)?\b|\bbye\b)[\s.,!?-]*$/i;
+        const tail = /(?:\b(?:oz\s*well|all['’]?s?\s*well|as\s*well|also|oswald)\b\s*,?\s*i(?:['’]?m|\s+am)\s+done\b|\b(?:oz\s*well|all['’]?s\s*well|also|oswald)\b|\bi(?:['’]?m|\s+am)\s+done\b|\b(?:that\s+was\s+|was\s+)?well\s+done\b|\bthat['’]?s?\s+(?:was\s+)?all\b|\bthank(?:s|\s+you)(?:\s+for\s+watching)?\b|\bbye\b)[\s.,!?-]*$/i;
         let prev = null;
         while (text !== prev && text) { prev = text; text = text.replace(tail, "").replace(/[\s.,!?-]+$/, ""); }
         return text.trim();
     }
 
-    async function stopAndTranscribe(stripStop) {
+    async function stopAndTranscribe(stripStop, trimSamples) {
         if (!sessionActive) return;
         sessionActive = false;
         try { cmdSource.disconnect(sessionProc); sessionProc.disconnect(); sessionSink.disconnect(); } catch (e) {}
         let len = 0; for (const c of sessionChunks) len += c.length;
-        const samples = new Float32Array(len); let o = 0; for (const c of sessionChunks) { samples.set(c, o); o += c.length; }
+        let samples = new Float32Array(len); let o = 0; for (const c of sessionChunks) { samples.set(c, o); o += c.length; }
+        // Cut the measured stop utterance (minus margin) off the tail so Whisper doesn't see it.
+        if (trimSamples > 0 && samples.length > trimSamples) {
+            samples = samples.subarray(0, samples.length - trimSamples);
+            len = samples.length;
+        }
         let peak = 0; for (let i = 0; i < samples.length; i++) { const a = Math.abs(samples[i]); if (a > peak) peak = a; }
         const secs = (len / 16000).toFixed(1);
         console.log(`[dictate] session ${secs}s, ${len} samples, peak ${peak.toFixed(3)}`);
