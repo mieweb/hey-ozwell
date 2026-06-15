@@ -157,7 +157,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Same HeyBuddy instance the bars use: onProcessed feeds the graphs (above),
     // and here onDetected opens + drives the embedded Ozwell widget. So this page
     // shows your new model's confidence bars AND the chatbot responding, together.
-    OzwellChat.mount(); // floating Ozwell widget
+    // Guard: the Ozwell widget loads from a separate server (:3000). If that's down, don't let
+    // it crash the whole page — the wake/verify/transcribe layers work without the chat widget.
+    const ozwellReady = typeof OzwellChat !== "undefined";
+    if (ozwellReady) OzwellChat.mount();
+    else console.warn("[demo] Ozwell widget unavailable (:3000 not running) — wake/verify/transcribe still work, it just won't drive the chat.");
 
     const integ = document.createElement("div");
     integ.style = "margin:1em 0;padding:0.75em;border:1px solid #4af;border-radius:6px;" +
@@ -184,7 +188,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     function driveOzwell(content, label) {
         if (window.__ozEnrollActive) return; // ignore detections during enrollment
         integ.innerHTML = label;
-        OzwellChat.open();
+        if (ozwellReady) OzwellChat.open();
         if (widgetReady) sendToWidget(content);
         else { pendingContent = content; setTimeout(() => { if (pendingContent) { sendToWidget(pendingContent); pendingContent = null; } }, 2500); }
     }
@@ -215,7 +219,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (!pendingWake || window.__ozEnrollActive) { pendingWake = null; return; }
         const { content, label, name } = pendingWake; pendingWake = null;
         const sv = window.SpeakerVerify;
-        const v = (sv && sv.isLoaded() && sv.hasEnrollment(name)) ? sv.verify(name, audioSamples, 16000) : null;
+        let v = null;
+        if (sv && sv.isLoaded() && sv.hasEnrollment(name)) {
+            const t0 = performance.now();
+            v = sv.verify(name, audioSamples, 16000);
+            // [latency] wake-detection per-frame compute (the <250ms target) + one-shot speaker verify
+            console.log(`[latency] ${name}: wake-frame ~${heyBuddy.frameTimeEma.toFixed(0)}ms | speaker-verify ${(performance.now() - t0).toFixed(0)}ms`);
+        }
         const tag = v ? ` (${v.score.toFixed(2)})` : "";
 
         // During an active dictation session, only a verified "ozwell i'm done" ends it.
@@ -233,7 +243,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (name === "hey-ozwell") {
             // START a dictation session: open Ozwell and record until "ozwell i'm done"/Stop.
             integ.innerHTML = `${label} → ✅ <b>verified${tag}</b> → starting dictation…`;
-            OzwellChat.open();
+            if (ozwellReady) OzwellChat.open();
             beep(880); // "go" chime — session is live, start dictating now
             startSession();
         } else { // stop phrase but no session running — nothing to end, don't inject anything
@@ -394,7 +404,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
         integ.innerHTML = `🎤 <b>transcribing ${secs}s on-device…</b>` + (w.isLoaded() ? "" : " <span style='color:#9fb6cc'>(loading model, first time)</span>");
         try {
+            const t0 = performance.now();
             let text = (await w.transcribe(samples, 16000)).replace(/\[BLANK_AUDIO\]/gi, "").trim();
+            // [latency] one-shot transcription at session end (not subject to the 250ms target)
+            console.log(`[latency] transcribe ${secs}s of audio: ${((performance.now() - t0) / 1000).toFixed(1)}s (${w.modelName()})`);
             // Ended by voice: strip the trailing stop phrase from the TEXT (precise — keeps real
             // words a blind audio trim would eat). Silence auto-stop passes false.
             if (stripStop) text = stripStopPhrase(text);
