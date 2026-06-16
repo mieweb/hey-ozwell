@@ -10,6 +10,24 @@ made-up word "ozwell" (the earlier Whisper/ASR text-gate failed because ASR hear
 hallucinates). It runs ONLY on a fire, reuses the embedding pass-1 already computed → no extra model
 inference cost, ~1.6MB ONNX, no audio re-processing.
 
+## How this relates to the speaker voiceprint (they are NOT the same)
+The product already has a **speaker voiceprint** (TitaNet speaker verification). That checks **WHO is
+speaking** — "is this the enrolled doctor's voice?" It does NOT check **WHAT** was said; it can't tell
+"ozwell i'm done" from "pass the salt." So it does nothing about the over-firing problem, because the
+false fires are the enrolled user's OWN non-phrase speech:
+
+> User dictating says "...yeah, let me know as well." → pass-1 mis-fires → voiceprint check "is this the
+> doctor?" → YES (it's their voice) → passes → dictation STOPS though the phrase was never said.
+
+The voiceprint only catches OTHER people triggering the session. The **acoustic verifier checks WHAT was
+said** — it's the piece that catches the user's own non-phrase fires. The two are complementary:
+- **Voiceprint** → stops other people from acting on your session (WHO).
+- **Acoustic verifier** → stops your own random speech from acting on it (WHAT).
+
+NOTE on "enrollment": the per-user enrollment that exists feeds the VOICEPRINT. The "verifier enrollment"
+mentioned below is a different use of the same captured reps — feeding them as POSITIVE examples to the
+acoustic verifier so it accepts the user's real-voice phrase. Same recording, different model/job.
+
 ## Offline results (what we know going in)
 - Kills **~99%** of false-fires on an INDEPENDENT corpus (AMI, never trained on). Stable.
 - Keeps **~99%** of wakes across 390 disjoint synthetic voices, uniform across 10 accents. Stable.
