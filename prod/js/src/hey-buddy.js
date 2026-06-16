@@ -7,9 +7,7 @@ import {
     MelSpectrogram,
     WakeWord
 } from "./models.js";
-import { Verifier } from "./models/verifier.js";
 import { AcousticVerifier } from "./models/acoustic-verifier.js";
-import { WhisperASR } from "./models/asr-whisper.js";
 
 /**
  * Combines an array of embedding buffers into a single embedding tensor.
@@ -482,7 +480,5 @@ export class HeyBuddy {
 
 if (typeof window !== "undefined") {
     window.HeyBuddy = HeyBuddy;
-    window.Verifier = Verifier;                  // stage-2 ASR verifier (failed approach, kept for ref)
     window.AcousticVerifier = AcousticVerifier;  // stage-2 ACOUSTIC verifier (embedding MLP — the one we ship)
-    window.WhisperASR = WhisperASR;              // stage-2 ASR engine (sherpa whisper WASM)
 }
