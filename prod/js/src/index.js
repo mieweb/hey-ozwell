@@ -169,33 +169,39 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 
     /** Clean STAGE-2 VERIFIER feed (so you don't have to watch the console fire 10x/phrase).
-     *  One row per phrase you say: green CONFIRMED / red REJECTED + the verifier's confidence.
-     *  Collapses the per-frame decisions of a single utterance (within 1.5s) into one row. */
+     *  One row per phrase: shows "checking…" while you talk, then SETTLES to a single green CONFIRMED /
+     *  red REJECTED verdict (no flicker). A row settles ~700ms after the last frame of the utterance. */
     const vpanel = document.createElement("div");
-    vpanel.style.cssText = "margin:8px 0 16px";
-    vpanel.innerHTML = '<label style="font:600 12px system-ui;letter-spacing:.12em;color:#8a93a6">STAGE-2 VERIFIER (real wake vs false fire)</label>';
+    vpanel.style.cssText = "margin:0 0 22px";
+    const vhead = document.createElement("div");
+    vhead.textContent = "STAGE-2 VERIFIER — real wake vs false fire";
+    vhead.style.cssText = "font:600 12px system-ui,sans-serif;letter-spacing:.1em;color:#8a93a6;margin-bottom:8px";
     const vlist = document.createElement("div");
-    vlist.style.cssText = "margin-top:6px";
-    vpanel.appendChild(vlist);
-    (graphsContainer || document.body).prepend(vpanel);
+    vpanel.append(vhead, vlist);
+    graphsContainer.parentNode.insertBefore(vpanel, graphsContainer);
     const prettyName = (n) => n.replace(/-/g, " ");
     const vstate = {};
     heyBuddy.onVerifierDecision((name, d) => {
         const now = Date.now();
         let g = vstate[name];
         if (!g || now - g.ts > 1500) { // new utterance -> new row
-            g = vstate[name] = { ts: now, anyAccepted: false, maxScore: 0, row: document.createElement("div") };
-            g.row.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:9px 14px;margin:5px 0;border-radius:10px;font:600 15px system-ui;transition:background .15s";
+            g = vstate[name] = { ts: now, fired: false, peak: 0, row: document.createElement("div"), timer: null };
+            g.row.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:10px 14px;margin:6px 0;border-radius:10px;font:600 15px system-ui,sans-serif;background:rgba(148,163,184,.12);color:#94a3b8";
+            g.row.innerHTML = `<span>“${prettyName(name)}”</span><span>checking…</span>`;
             vlist.prepend(g.row);
-            while (vlist.children.length > 9) vlist.removeChild(vlist.lastChild);
+            while (vlist.children.length > 8) vlist.removeChild(vlist.lastChild);
         }
         g.ts = now;
-        if (d.accepted) g.anyAccepted = true;
-        if (typeof d.score === "number") g.maxScore = Math.max(g.maxScore, d.score);
-        const ok = g.anyAccepted;
-        g.row.style.background = ok ? "rgba(34,197,94,.16)" : "rgba(239,68,68,.16)";
-        g.row.style.color = ok ? "#22c55e" : "#f87171";
-        g.row.innerHTML = `<span>${ok ? "✅" : "🛑"} “${prettyName(name)}”</span><span style="font-variant-numeric:tabular-nums">${ok ? "CONFIRMED" : "REJECTED"} · ${Math.round(g.maxScore * 100)}%</span>`;
+        if (d.accepted) g.fired = true;                              // fired if any frame crossed the bar
+        if (typeof d.score === "number") g.peak = Math.max(g.peak, d.score);
+        clearTimeout(g.timer);
+        g.timer = setTimeout(() => {                                 // settle to one final verdict
+            const ok = g.fired;
+            g.row.style.background = ok ? "rgba(34,197,94,.16)" : "rgba(239,68,68,.16)";
+            g.row.style.color = ok ? "#22c55e" : "#f87171";
+            g.row.innerHTML = `<span>${ok ? "✅" : "🛑"} “${prettyName(name)}”</span>` +
+                `<span style="font-variant-numeric:tabular-nums">${ok ? "CONFIRMED" : "REJECTED"} · ${Math.round(g.peak * 100)}%</span>`;
+        }, 700);
     });
 
     /** Add graphs */
