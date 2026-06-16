@@ -66,6 +66,11 @@ export class AcousticVerifier {
         const flat = embeddingBuffer.data instanceof Float32Array
             ? embeddingBuffer.data
             : Float32Array.from(embeddingBuffer.data);
+        if (this.debug) {
+            let mn = Infinity, mx = -Infinity, sum = 0;
+            for (let i = 0; i < flat.length; i++) { const v = flat[i]; if (v < mn) mn = v; if (v > mx) mx = v; sum += v; }
+            console.log(`[acoustic-verifier] INPUT dims=${JSON.stringify(embeddingBuffer.dims)} len=${flat.length} min=${mn.toFixed(3)} max=${mx.toFixed(3)} mean=${(sum/flat.length).toFixed(3)} first5=[${Array.from(flat.slice(0,5)).map(v=>v.toFixed(3)).join(",")}]`);
+        }
         const input = await ONNX.createTensor("float32", flat, [1, flat.length]);
         const out = await entry.session.run({ input });
         const p = AcousticVerifier.probabilityOf(out);
