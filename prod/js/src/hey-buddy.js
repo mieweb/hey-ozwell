@@ -7,6 +7,9 @@ import {
     MelSpectrogram,
     WakeWord
 } from "./models.js";
+import { Verifier } from "./models/verifier.js";
+import { AcousticVerifier } from "./models/acoustic-verifier.js";
+import { WhisperASR } from "./models/asr-whisper.js";
 
 /**
  * Combines an array of embedding buffers into a single embedding tensor.
@@ -72,6 +75,20 @@ export class HeyBuddy {
         this.wakeWordThreshold = options.wakeWordThreshold || 0.5;
         // Per-word thresholds (keyed by model file name, e.g. "hey-ozwell"); falls back to wakeWordThreshold.
         this.wakeWordThresholds = options.wakeWordThresholds || {};
+        // Debounce: consecutive over-threshold frames required to fire. 1 = original behavior.
+        // Set 2 (or 3) to kill single-frame false-fires (conversational/TV). Per-word overrides via
+        // wakeWordDebounces, e.g. { "hey-ozwell": 2, "ozwell-i'm-done": 2 }.
+        this.wakeWordDebounce = options.wakeWordDebounce || 1;
+        this.wakeWordDebounces = options.wakeWordDebounces || {};
+        // Stage-2 verifier (optional): an object with `async verify(audioFloat32, wakeWordName) -> bool`.
+        // When set, a debounced stage-1 fire is only accepted if the verifier confirms it (e.g. an ASR
+        // re-check of the buffered audio). Rejects "confident on random speech" fires. null = stage-1 only.
+        this.verifier = options.verifier || null;
+        // Shadow mode: when true, the verifier still runs and LOGS what it would suppress, but does NOT
+        // block the fire. Use for a zero-risk live A/B (measure real suppression before gating).
+        this.verifierShadow = options.verifierShadow || false;
+        this.verifierAudioSamples = Math.round((options.verifierAudioSeconds || 2.0) * 16000);
+        this.recentAudio = new Float32Array(0); // rolling raw-audio buffer for the verifier
         this.wakeWordInterval = options.wakeWordInterval || 2.0; // How often a wake word can be uttered
 
         // Get options or use defaults for models
@@ -118,6 +135,7 @@ export class HeyBuddy {
             let modelName = model.split("/").pop().split(".")[0];
             let modelThreshold = this.wakeWordThresholds[modelName] ?? this.wakeWordThreshold;
             this.wakeWords[modelName] = new WakeWord(model, modelThreshold);
+            this.wakeWords[modelName].debounceFrames = this.wakeWordDebounces[modelName] ?? this.wakeWordDebounce;
             this.wakeWords[modelName].test(this.debug);
         }
 
@@ -310,6 +328,15 @@ export class HeyBuddy {
         // (highest raw probability). NOTE: do NOT compare by margin (prob - threshold) — that biases
         // toward the lower-threshold word (ozwell-done @0.5 out-margins hey-ozwell @0.8 even when you
         // clearly said "hey ozwell"). Raw probability is the correct comparison here.
+        // Live debounce visibility: show every threshold-crossing and whether debounce suppressed it.
+        // On conversational/TV audio you should see lots of "suppressed (run 1)" and few/no "FIRED".
+        for (let name in returnMap) {
+            const r = returnMap[name];
+            if (r.probability >= this.wakeWords[name].threshold) {
+                const db = this.wakeWords[name].debounceFrames || 1;
+                console.log(`${r.detected ? "🔔 FIRED" : "🔇 suppressed"} ${name} prob=${r.probability.toFixed(2)} run=${r.run}/${db}`);
+            }
+        }
         let best = null;
         for (let name in returnMap) {
             if (returnMap[name].detected) {
@@ -320,6 +347,29 @@ export class HeyBuddy {
             }
         }
         if (best !== null) {
+            // Stage-2: re-check the buffered audio with the verifier (e.g. ASR). Only fire if confirmed.
+            if (this.verifier) {
+                let confirmed = false;
+                try {
+                    // Pass the embedding window pass-1 just scored (3rd arg) for the ACOUSTIC verifier;
+                    // the ASR verifier ignores it and uses this.recentAudio instead.
+                    confirmed = await this.verifier.verify(this.recentAudio, best.name, this.embeddingBuffer);
+                } catch (e) {
+                    console.error("verifier error (failing open):", e);
+                    confirmed = true; // don't let a verifier crash block detection
+                }
+                if (!confirmed) {
+                    if (this.verifierShadow) {
+                        // shadow: log what we WOULD have killed, but fire anyway (zero recall risk)
+                        console.log(`👻 stage-2 WOULD reject ${best.name} (SHADOW — firing anyway) stage-1 prob ${best.prob.toFixed(2)}`);
+                    } else {
+                        console.log(`🛑 stage-2 REJECTED ${best.name} (stage-1 prob ${best.prob.toFixed(2)})`);
+                        return returnMap;
+                    }
+                } else {
+                    console.log(`✅ stage-2 confirmed ${best.name}`);
+                }
+            }
             this.wakeWordDetected(best.name);
         }
         return returnMap;
@@ -346,6 +396,17 @@ export class HeyBuddy {
 
         // Get the last batch of samples
         const lastBatch = audio.subarray(audio.length - this.batcher.batchIntervalSamples);
+
+        // Maintain a rolling raw-audio buffer (~verifierAudioSeconds) for the stage-2 verifier,
+        // by appending each new increment. Only when a verifier is attached (else skip the work).
+        if (this.verifier) {
+            const merged = new Float32Array(this.recentAudio.length + lastBatch.length);
+            merged.set(this.recentAudio, 0);
+            merged.set(lastBatch, this.recentAudio.length);
+            this.recentAudio = merged.length > this.verifierAudioSamples
+                ? merged.slice(merged.length - this.verifierAudioSamples)
+                : merged;
+        }
 
         // Calculate the spectrogram for this buffer, assert it is exactly one window
         const spectrograms = await this.spectrogram.run(audio);
@@ -421,4 +482,7 @@ export class HeyBuddy {
 
 if (typeof window !== "undefined") {
     window.HeyBuddy = HeyBuddy;
+    window.Verifier = Verifier;                  // stage-2 ASR verifier (failed approach, kept for ref)
+    window.AcousticVerifier = AcousticVerifier;  // stage-2 ACOUSTIC verifier (embedding MLP — the one we ship)
+    window.WhisperASR = WhisperASR;              // stage-2 ASR engine (sherpa whisper WASM)
 }

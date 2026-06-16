@@ -86,6 +86,13 @@ const options = {
         "hey-ozwell": 0.8,
         "ozwell-i'm-done": 0.5,
     },
+    // DEBOUNCE TEST: require N consecutive over-threshold frames to fire. 1 = original (fires on
+    // single-frame spikes). Set to 2 to kill conversational/TV false-fires (they're single-frame;
+    // real spoken phrases sustain 3-6 frames). Try 2 first; 3 is stricter but costs recall. Toggle live.
+    wakeWordDebounces: {
+        "hey-ozwell": 2,
+        "ozwell-i'm-done": 2,
+    },
     vadModelPath: `${rootUrl}/pretrained/silero-vad.onnx`,
     spectrogramModelPath: `${rootUrl}/pretrained/mel-spectrogram.onnx`,
     embeddingModelPath: `${rootUrl}/pretrained/speech-embedding.onnx`,
@@ -109,6 +116,26 @@ document.addEventListener("DOMContentLoaded", async () => {
     } catch (error) {
         alert("Microphone access has been denied, this demo will not function. Please reset audio permissions and refresh the page to try again.");
         return;
+    }
+
+    /** Stage-2 ACOUSTIC verifier (embedding MLP — the one we ship). Re-scores the embedding pass-1 used
+     *  and suppresses junk fires; judges SOUND, not text (so it works on the made-up word "ozwell" where
+     *  ASR hallucinates). Offline: kills ~99% of false-fires, keeps ~99% of diverse voices; real-voice
+     *  recall is the open risk (one recording dropped ~40% — fixed by 5-rep enrollment). TOGGLE:
+     *    "off"    = stage-1 only
+     *    "shadow" = runs + logs what it WOULD kill, but FIRES ANYWAY (zero recall risk — use to A/B live)
+     *    "active" = actually suppresses junk fires
+     *  Start in "shadow" to see its calls on your live speech, then flip to "active". */
+    const VERIFIER_MODE = "active"; // "off" | "shadow" | "active"
+    if (VERIFIER_MODE !== "off" && typeof AcousticVerifier !== "undefined") {
+        // Only the stop phrase has a verifier so far (it's the one that over-fires / cuts off dictation).
+        // hey-ozwell passes through untouched until we train/export its verifier.
+        options.verifier = new AcousticVerifier(
+            { "ozwell-i'm-done": { modelPath: "../models/ozwell-i'm-done-verifier.onnx", threshold: 0.1 } },
+            { debug: true }
+        );
+        options.verifierShadow = (VERIFIER_MODE === "shadow");
+        console.log(`🔬 acoustic verifier mode: ${VERIFIER_MODE}`);
     }
 
     /** Instantiate */
