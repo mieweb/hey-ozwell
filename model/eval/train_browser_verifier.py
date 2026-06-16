@@ -29,12 +29,22 @@ for name in ["logistic","mlp32","mlp256_64"]:
         print(f"   t={t}: real-wake kept {np.mean(pk[t]):3.0f}%  | false-fire rejected {np.mean(nr[t]):3.0f}%")
     print()
 
-# Train FINAL on all data with the most robust model, export ONNX
-final=mk("logistic").fit(X,y)
+# Train FINAL as a small MLP (standard Gemm/Relu/Sigmoid ops -> wasm-compatible; logistic's
+# LinearClassifier op is ai.onnx.ml which onnxruntime-web CANNOT run). Small + regularized to not overfit.
+final=MLPClassifier(hidden_layer_sizes=(32,),alpha=1.0,max_iter=4000,random_state=0).fit(X,y)
 from skl2onnx import convert_sklearn
 from skl2onnx.common.data_types import FloatTensorType
 onx=convert_sklearn(final,initial_types=[("input",FloatTensorType([None,1536]))],options={id(final):{"zipmap":False}})
-import os; fp="../../prod/js/models/ozwell-i'm-done-verifier.onnx"
+import os, onnx; fp="../../prod/js/models/ozwell-i'm-done-verifier.onnx"
 open(fp,"wb").write(onx.SerializeToString())
-print(f"exported {fp} ({os.path.getsize(fp)//1024} KB) trained on {len(pos)} pos / {len(neg)} neg (browser-native)")
+# verify wasm-compatibility: only standard ai.onnx ops, no ai.onnx.ml
+doms=set((n.domain or "ai.onnx") for n in onnx.load(fp).graph.node)
+ops=sorted(set(n.op_type for n in onnx.load(fp).graph.node))
+print(f"exported {fp} ({os.path.getsize(fp)//1024} KB) | domains={doms} | ops={ops}")
+print("WASM-SAFE" if not any("ml" in d for d in doms) else "!! STILL HAS ai.onnx.ml — will NOT load in browser")
+# parity check
+import onnxruntime as ort
+s=ort.InferenceSession(open(fp,'rb').read(),providers=["CPUExecutionProvider"])
+chk=pos[:5]; op=s.run(None,{"input":chk})[1][:,1]; sp=final.predict_proba(chk)[:,1]
+print("parity P(wake):", [f'{a:.3f}/{b:.3f}' for a,b in zip(op,sp)])
 print("TRAIN_DONE")
