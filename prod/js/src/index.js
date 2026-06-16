@@ -126,7 +126,7 @@ document.addEventListener("DOMContentLoaded", async () => {
      *    "shadow" = runs + logs what it WOULD kill, but FIRES ANYWAY (zero recall risk — use to A/B live)
      *    "active" = actually suppresses junk fires
      *  Start in "shadow" to see its calls on your live speech, then flip to "active". */
-    const VERIFIER_MODE = "active"; // "off" | "shadow" | "active"
+    const VERIFIER_MODE = "shadow"; // "off" | "shadow" | "active"  (shadow = capture/A-B without suppressing)
     if (VERIFIER_MODE !== "off" && typeof AcousticVerifier !== "undefined") {
         // Only the stop phrase has a verifier so far (it's the one that over-fires / cuts off dictation).
         // hey-ozwell passes through untouched until we train/export its verifier.

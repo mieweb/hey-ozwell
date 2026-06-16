@@ -66,30 +66,20 @@ export class AcousticVerifier {
         const flat = embeddingBuffer.data instanceof Float32Array
             ? embeddingBuffer.data
             : Float32Array.from(embeddingBuffer.data);
-        if (this.debug) {
-            let mn = Infinity, mx = -Infinity, sum = 0;
-            for (let i = 0; i < flat.length; i++) { const v = flat[i]; if (v < mn) mn = v; if (v > mx) mx = v; sum += v; }
-            console.log(`[acoustic-verifier] INPUT dims=${JSON.stringify(embeddingBuffer.dims)} len=${flat.length} min=${mn.toFixed(3)} max=${mx.toFixed(3)} mean=${(sum/flat.length).toFixed(3)} first5=[${Array.from(flat.slice(0,5)).map(v=>v.toFixed(3)).join(",")}]`);
+        // CAPTURE mode: collect real browser embeddings to TRAIN the verifier on the exact runtime
+        // representation (fixes the offline/browser embedding mismatch). Set window.__capMode = "pos"
+        // (while saying the phrase) or "neg" (while talking junk); window.__dumpCap() downloads the JSON.
+        if (typeof window !== "undefined" && window.__capMode && window.__capMode !== "off") {
+            window.__cap = window.__cap || { pos: [], neg: [] };
+            const bucket = window.__cap[window.__capMode];
+            if (bucket) {
+                bucket.push(Array.from(flat));
+                console.log(`📥 captured ${window.__capMode} #${bucket.length} (stage-1 fire)`);
+            }
         }
         const input = await ONNX.createTensor("float32", flat, [1, flat.length]);
         const out = await entry.session.run({ input });
         let p = AcousticVerifier.probabilityOf(out);
-
-        // DIAGNOSTIC: also score the TRANSPOSED input (frame/dim swap) to find the correct flatten order.
-        // embeddingBuffer.dims = [frames, dim]; transpose to [dim, frames] flatten: T[d*F+f] = flat[f*D+d].
-        if (this.debug) {
-            const F = embeddingBuffer.dims[0], D = embeddingBuffer.dims[1];
-            const T = new Float32Array(F * D);
-            for (let f = 0; f < F; f++) for (let d = 0; d < D; d++) T[d * F + f] = flat[f * D + d];
-            const tIn = await ONNX.createTensor("float32", T, [1, T.length]);
-            const pT = AcousticVerifier.probabilityOf(await entry.session.run({ input: tIn }));
-            console.log(`[acoustic-verifier] ORDER PROBE  as-is P=${p.toFixed(3)}  transposed P=${pT.toFixed(3)}  (whichever is ~1.0 on a REAL wake is the right order)`);
-            // One-time full-vector dump: copy this whole line so we can diagnose permutation vs representation.
-            if (!AcousticVerifier._dumped) {
-                AcousticVerifier._dumped = true;
-                console.log("FULLVEC " + JSON.stringify(Array.from(flat).map(v => Math.round(v * 1000) / 1000)));
-            }
-        }
         const ok = p >= entry.threshold;
         if (this.debug) {
             console.log(`[acoustic-verifier] ${wakeWordName}: P(wake)=${p.toFixed(3)} thr=${entry.threshold} -> ${ok ? "CONFIRM" : "reject"}`);
@@ -109,4 +99,22 @@ export class AcousticVerifier {
         if (!d) return 1.0; // can't read -> fail open
         return d.length >= 2 ? d[1] * 1 : d[0] * 1; // [neg, pos] -> pos; single value -> as-is
     }
+}
+
+// Capture helpers (browser console). Workflow:
+//   window.__capMode = "pos"   // then say "ozwell i'm done" ~20 times
+//   window.__capMode = "neg"   // then talk/junk for a few minutes
+//   window.__capMode = "off"   // stop
+//   window.__dumpCap()         // downloads verifier-capture.json (send it back for retraining)
+if (typeof window !== "undefined") {
+    window.__capMode = window.__capMode || "off";
+    window.__dumpCap = () => {
+        const cap = window.__cap || { pos: [], neg: [] };
+        console.log(`dumping capture: ${cap.pos.length} pos, ${cap.neg.length} neg`);
+        const blob = new Blob([JSON.stringify(cap)], { type: "application/json" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "verifier-capture.json";
+        a.click();
+    };
 }
