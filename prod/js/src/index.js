@@ -131,7 +131,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         // Only the stop phrase has a verifier so far (it's the one that over-fires / cuts off dictation).
         // hey-ozwell passes through untouched until we train/export its verifier.
         options.verifier = new AcousticVerifier(
-            { "ozwell-i'm-done": { modelPath: "../models/ozwell-i'm-done-verifier.onnx", threshold: 0.5 } },
+            { "ozwell-i'm-done": { modelPath: "../models/ozwell-i'm-done-verifier.onnx", threshold: 0.65 } },
             { debug: true }
         );
         options.verifierShadow = (VERIFIER_MODE === "shadow");
