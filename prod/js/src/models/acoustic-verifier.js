@@ -50,6 +50,17 @@ export class AcousticVerifier {
      * @returns {Promise<boolean>} - true if the acoustic verifier confirms the fire.
      */
     async verify(_audio, wakeWordName, embeddingBuffer) {
+        // CAPTURE mode (runs for ANY fired word, even ones without a verifier yet — e.g. hey-ozwell).
+        // Collects real browser embeddings to TRAIN a verifier on the exact runtime representation.
+        // Set window.__capMode = "pos" (saying the phrase) or "neg" (junk); window.__dumpCap() downloads.
+        if (embeddingBuffer && embeddingBuffer.data && typeof window !== "undefined" && window.__capMode && window.__capMode !== "off") {
+            const fc = embeddingBuffer.data instanceof Float32Array ? embeddingBuffer.data : Float32Array.from(embeddingBuffer.data);
+            window.__cap = window.__cap || {};
+            window.__cap[wakeWordName] = window.__cap[wakeWordName] || { pos: [], neg: [] };
+            const b = window.__cap[wakeWordName][window.__capMode];
+            if (b) { b.push(Array.from(fc)); console.log(`📥 captured ${wakeWordName}/${window.__capMode} #${b.length}`); }
+        }
+
         const entry = this.models[wakeWordName];
         if (!entry) return true; // no verifier for this word -> don't block (fail open)
         if (!embeddingBuffer || !embeddingBuffer.data) {
@@ -66,17 +77,6 @@ export class AcousticVerifier {
         const flat = embeddingBuffer.data instanceof Float32Array
             ? embeddingBuffer.data
             : Float32Array.from(embeddingBuffer.data);
-        // CAPTURE mode: collect real browser embeddings to TRAIN the verifier on the exact runtime
-        // representation (fixes the offline/browser embedding mismatch). Set window.__capMode = "pos"
-        // (while saying the phrase) or "neg" (while talking junk); window.__dumpCap() downloads the JSON.
-        if (typeof window !== "undefined" && window.__capMode && window.__capMode !== "off") {
-            window.__cap = window.__cap || { pos: [], neg: [] };
-            const bucket = window.__cap[window.__capMode];
-            if (bucket) {
-                bucket.push(Array.from(flat));
-                console.log(`📥 captured ${window.__capMode} #${bucket.length} (stage-1 fire)`);
-            }
-        }
         const input = await ONNX.createTensor("float32", flat, [1, flat.length]);
         const out = await entry.session.run({ input });
         let p = AcousticVerifier.probabilityOf(out);
@@ -109,8 +109,8 @@ export class AcousticVerifier {
 if (typeof window !== "undefined") {
     window.__capMode = window.__capMode || "off";
     window.__dumpCap = () => {
-        const cap = window.__cap || { pos: [], neg: [] };
-        console.log(`dumping capture: ${cap.pos.length} pos, ${cap.neg.length} neg`);
+        const cap = window.__cap || {};
+        for (const w in cap) console.log(`  ${w}: ${cap[w].pos.length} pos, ${cap[w].neg.length} neg`);
         const blob = new Blob([JSON.stringify(cap)], { type: "application/json" });
         const a = document.createElement("a");
         a.href = URL.createObjectURL(blob);
