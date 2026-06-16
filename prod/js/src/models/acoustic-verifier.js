@@ -80,6 +80,7 @@ export class AcousticVerifier {
         const input = await ONNX.createTensor("float32", flat, [1, flat.length]);
         const out = await entry.session.run({ input });
         let p = AcousticVerifier.probabilityOf(out);
+        this.lastScore = p; // expose for UI (read right after verify())
         const ok = p >= entry.threshold;
         if (this.debug) {
             console.log(`[acoustic-verifier] ${wakeWordName}: P(wake)=${p.toFixed(3)} thr=${entry.threshold} -> ${ok ? "CONFIRM" : "reject"}`);

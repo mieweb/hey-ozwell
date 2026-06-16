@@ -150,6 +150,7 @@ export class HeyBuddy {
         this.recordingCallbacks = [];
         this.processedCallbacks = [];
         this.detectedCallbacks = [];
+        this.verifierDecisionCallbacks = []; // (name, {accepted, score, stage1}) per stage-2 decision
 
         // Initialize batcher and add callback
         this.batcher = new AudioBatcher(
@@ -182,6 +183,14 @@ export class HeyBuddy {
      */
     onDetected(names, callback) {
         this.detectedCallbacks.push({names, callback});
+    }
+
+    /**
+     * Add a callback for each stage-2 verifier decision (confirm/reject), for clean UI display.
+     * @param {Function} callback - called with (name, {accepted, score, stage1}).
+     */
+    onVerifierDecision(callback) {
+        this.verifierDecisionCallbacks.push(callback);
     }
 
     /**
@@ -356,6 +365,9 @@ export class HeyBuddy {
                     console.error("verifier error (failing open):", e);
                     confirmed = true; // don't let a verifier crash block detection
                 }
+                // Emit a clean decision event for the UI (one per fire frame; UI collapses per utterance).
+                const score = (this.verifier && typeof this.verifier.lastScore === "number") ? this.verifier.lastScore : null;
+                for (let cb of this.verifierDecisionCallbacks) cb(best.name, {accepted: confirmed, score, stage1: best.prob});
                 if (!confirmed) {
                     if (this.verifierShadow) {
                         // shadow: log what we WOULD have killed, but fire anyway (zero recall risk)
