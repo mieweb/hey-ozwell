@@ -84,6 +84,11 @@ export class AcousticVerifier {
             const tIn = await ONNX.createTensor("float32", T, [1, T.length]);
             const pT = AcousticVerifier.probabilityOf(await entry.session.run({ input: tIn }));
             console.log(`[acoustic-verifier] ORDER PROBE  as-is P=${p.toFixed(3)}  transposed P=${pT.toFixed(3)}  (whichever is ~1.0 on a REAL wake is the right order)`);
+            // One-time full-vector dump: copy this whole line so we can diagnose permutation vs representation.
+            if (!AcousticVerifier._dumped) {
+                AcousticVerifier._dumped = true;
+                console.log("FULLVEC " + JSON.stringify(Array.from(flat).map(v => Math.round(v * 1000) / 1000)));
+            }
         }
         const ok = p >= entry.threshold;
         if (this.debug) {
