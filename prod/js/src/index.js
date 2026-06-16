@@ -172,10 +172,11 @@ document.addEventListener("DOMContentLoaded", async () => {
      *  One row per phrase: shows "checking…" while you talk, then SETTLES to a single green CONFIRMED /
      *  red REJECTED verdict (no flicker). A row settles ~700ms after the last frame of the utterance. */
     const vpanel = document.createElement("div");
-    vpanel.style.cssText = "margin:0 0 22px";
+    vpanel.id = "verifier-feed";
+    vpanel.style.cssText = "margin:4px 0 20px;padding:12px 14px;border:1px solid rgba(255,255,255,.12);border-radius:12px;background:rgba(255,255,255,.03)";
     const vhead = document.createElement("div");
-    vhead.textContent = "STAGE-2 VERIFIER — real wake vs false fire";
-    vhead.style.cssText = "font:600 12px system-ui,sans-serif;letter-spacing:.1em;color:#8a93a6;margin-bottom:8px";
+    vhead.textContent = "Stage-2 verifier — real wake vs false fire";
+    vhead.style.cssText = "font:600 12px system-ui,sans-serif;letter-spacing:.08em;color:#8a93a6;margin-bottom:8px;position:static;text-transform:none;text-align:left;max-width:none";
     const vlist = document.createElement("div");
     vpanel.append(vhead, vlist);
     graphsContainer.parentNode.insertBefore(vpanel, graphsContainer);
