@@ -73,7 +73,18 @@ export class AcousticVerifier {
         }
         const input = await ONNX.createTensor("float32", flat, [1, flat.length]);
         const out = await entry.session.run({ input });
-        const p = AcousticVerifier.probabilityOf(out);
+        let p = AcousticVerifier.probabilityOf(out);
+
+        // DIAGNOSTIC: also score the TRANSPOSED input (frame/dim swap) to find the correct flatten order.
+        // embeddingBuffer.dims = [frames, dim]; transpose to [dim, frames] flatten: T[d*F+f] = flat[f*D+d].
+        if (this.debug) {
+            const F = embeddingBuffer.dims[0], D = embeddingBuffer.dims[1];
+            const T = new Float32Array(F * D);
+            for (let f = 0; f < F; f++) for (let d = 0; d < D; d++) T[d * F + f] = flat[f * D + d];
+            const tIn = await ONNX.createTensor("float32", T, [1, T.length]);
+            const pT = AcousticVerifier.probabilityOf(await entry.session.run({ input: tIn }));
+            console.log(`[acoustic-verifier] ORDER PROBE  as-is P=${p.toFixed(3)}  transposed P=${pT.toFixed(3)}  (whichever is ~1.0 on a REAL wake is the right order)`);
+        }
         const ok = p >= entry.threshold;
         if (this.debug) {
             console.log(`[acoustic-verifier] ${wakeWordName}: P(wake)=${p.toFixed(3)} thr=${entry.threshold} -> ${ok ? "CONFIRM" : "reject"}`);
