@@ -590,6 +590,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     let voiceprints = loadVoiceprints();
     applyVoiceprints(voiceprints); // re-apply any saved voiceprint to the runtime on load
+    // The SV panel rendered earlier (before this load), so it showed WHAT(phrase) as not-enrolled even
+    // when it IS persisted. Re-render now that heyBuddy has the loaded voiceprints so the status is honest
+    // and you don't re-enroll the phrase gate on every refresh.
+    renderSvPanel();
 
     // Capture hook: a 2nd onProcessed that snapshots the live embedding while capturing,
     // and tracks live voiceprint similarity (for threshold tuning).
