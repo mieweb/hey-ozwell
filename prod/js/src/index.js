@@ -180,7 +180,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const gateBox = document.createElement("div");
     gateBox.style = "margin:1em 0;padding:0.6em 0.75em;border:1px solid #2b3a4a;border-radius:6px;" +
                     "font-family:monospace;font-size:12px;color:#9fb6cc;background:#0b1622";
-    gateBox.innerHTML = "<b style='color:#cde'>Gate scores</b> — WHO(voice)=speaker (thr 0.4) · WHAT(phrase)=voiceprint cosine (thr 0.8) · newest first";
+    gateBox.innerHTML = "<b style='color:#cde'>Gate scores</b> — WHO(voice)=speaker (thr 0.4) · WHAT(phrase)=voiceprint cosine (thr 0.82) · newest first";
     const gateRows = document.createElement("div");
     gateRows.style = "margin-top:6px";
     gateBox.appendChild(gateRows);
@@ -227,7 +227,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     let svCapture = null; // { targetName, resolve } while enrollment is waiting for an utterance
     // WHAT-precision reject threshold on RAW cosine (the metric validated on the demo branch): real
     // wakes ~0.92, near-misses ≤0.82 → 0.88 sits in the gap. Tune live with window.__wakeRejectSim.
-    const WAKE_REJECT_SIM = 0.8;
+    const WAKE_REJECT_SIM = 0.82;
     // Raw cosine (no background-mean subtraction — matches the demo's validated metric, NOT the
     // product's voiceprintSimilarity) of a wake embedding to the phrase's enrolled voiceprints (max).
     function phraseCosine(name, vec) {
