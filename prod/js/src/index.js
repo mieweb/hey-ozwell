@@ -174,6 +174,27 @@ document.addEventListener("DOMContentLoaded", async () => {
     integ.innerHTML = "<b>Ozwell integration</b> — say “hey ozwell” to open Ozwell.";
     document.body.insertBefore(integ, document.body.firstChild);
 
+    // PERSISTENT gate-score log (its own box, append-only, survives dictation) — for tuning thresholds:
+    // every detection drops a row here with WHO + WHAT scores + verdict, so the numbers don't vanish when
+    // the integration box flips to "dictating…". Newest on top, last 10 kept.
+    const gateBox = document.createElement("div");
+    gateBox.style = "margin:1em 0;padding:0.6em 0.75em;border:1px solid #2b3a4a;border-radius:6px;" +
+                    "font-family:monospace;font-size:12px;color:#9fb6cc;background:#0b1622";
+    gateBox.innerHTML = "<b style='color:#cde'>Gate scores</b> — WHO(voice)=speaker · WHAT(phrase)=voiceprint cosine (thr 0.88) · newest first";
+    const gateRows = document.createElement("div");
+    gateRows.style = "margin-top:6px";
+    gateBox.appendChild(gateRows);
+    document.body.insertBefore(gateBox, integ.nextSibling);
+    function logGate(name, v, sim, rej, outcome, color) {
+        const who = v ? `WHO ${v.score.toFixed(2)} ${v.pass ? "✓" : "✗"}` : "WHO —off";
+        const what = (sim != null) ? `WHAT ${sim.toFixed(2)} ${sim >= rej ? "✓" : "✗"}` : "WHAT —off";
+        const row = document.createElement("div");
+        row.style = `color:${color || "#cde"};padding:1px 0`;
+        row.textContent = `${name.padEnd(15)} ${who.padEnd(13)} · ${what.padEnd(14)} → ${outcome}`;
+        gateRows.prepend(row);
+        while (gateRows.children.length > 10) gateRows.removeChild(gateRows.lastChild);
+    }
+
     let widgetReady = false, pendingContent = null;
     window.addEventListener("message", (e) => {
         if (e.data && e.data.type === "ready") {
@@ -293,23 +314,27 @@ document.addEventListener("DOMContentLoaded", async () => {
         // passes, but it isn't the phrase). Replaces the dead Whisper transcript gate.
         if (sim != null && sim < rej) {
             integ.innerHTML = `${label} → 🛑 <b>not the phrase</b> — ignored ${gates}`;
+            logGate(name, v, sim, rej, "🛑 not the phrase (WHAT)", "#f88");
             return;
         }
 
         // During an active dictation session, only a verified "ozwell i'm done" ends it.
         if (sessionActive) {
             if (name === "ozwell-i'm-done" && v && v.pass) {
+                logGate(name, v, sim, rej, "✅ stop dictation", "#8f8");
                 const trimSamples = Math.max(0, audioSamples.length - Math.round(0.6 * 16000));
                 stopAndTranscribe(true, trimSamples);
-            } else showSessionUI();
+            } else { logGate(name, v, sim, rej, "… session ongoing", "#9fb6cc"); showSessionUI(); }
             return;
         }
 
         // WHO gate: if enrolled, require the doctor's voice; otherwise off.
         if (v && !v.pass) {
             integ.innerHTML = `${label} → 🔒 <b>not the enrolled doctor</b> — ignored ${gates}`;
+            logGate(name, v, sim, rej, "🔒 not the doctor (WHO)", "#f88");
             return;
         }
+        logGate(name, v, sim, rej, "✅ verified → " + (name === "hey-ozwell" ? "dictation" : "no session"), "#8f8");
         if (name === "hey-ozwell") {
             integ.innerHTML = `${label} → ✅ <b>verified</b> → starting dictation… ${gates}`;
             if (ozwellReady) OzwellChat.open();
@@ -333,13 +358,18 @@ document.addEventListener("DOMContentLoaded", async () => {
                     "font-family:monospace;color:#cde;background:#0b1622;line-height:1.6";
     function renderSvPanel() {
         const sv = window.SpeakerVerify;
-        const enrolledList = sv ? sv.enrolledPhrases() : [];
+        const whoList = sv ? sv.enrolledPhrases() : [];                                   // WHO = speaker voiceprint
+        const phraseNames = wakeWords.map((w) => w.replace(/ /g, "-"));
+        const whatList = phraseNames.filter((n) => heyBuddy.hasVoiceprint && heyBuddy.hasVoiceprint(n)); // WHAT = phrase voiceprint
+        const bothMissing = !whoList.length && !whatList.length;
+        const mismatch = whoList.length && !whatList.length; // speaker enrolled but phrase gate not (e.g. old enrollment)
         svPanel.innerHTML =
-            "<b>🩺 Doctor speaker-ID</b> — gate the wake word to <i>your</i> voice only.<br>" +
-            "<span style='color:#9fb6cc'>Status: " +
-            (enrolledList.length
-                ? "enrolled ✅ (" + enrolledList.join(", ") + ") — gate ON for those phrases"
-                : "not enrolled — gate off (anyone can wake)") +
+            "<b>🩺 Doctor enrollment</b> — one enroll sets BOTH gates: WHO (your voice) + WHAT (the phrase).<br>" +
+            "<span style='color:#9fb6cc'>" +
+            (bothMissing ? "not enrolled — gates off (anyone can wake)"
+                : "WHO(voice): " + (whoList.length ? whoList.join(", ") : "—none") +
+                  " &nbsp;·&nbsp; WHAT(phrase): " + (whatList.length ? whatList.join(", ") : "—none") +
+                  (mismatch ? " &nbsp;⚠️ phrase gate not set — click Enroll again" : "")) +
             "</span><div id='sv-status' style='margin:.3em 0;min-height:1.3em;color:#ffd60a'></div>";
         const row = document.createElement("div");
         const enrollBtn = document.createElement("button");
@@ -347,7 +377,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         enrollBtn.onclick = () => enrollDoctor(enrollBtn);
         const clearBtn = document.createElement("button");
         clearBtn.textContent = "Clear"; clearBtn.style = SV_BTN + ";margin-left:.5em;border-color:#27aae1";
-        clearBtn.onclick = () => { if (window.SpeakerVerify) window.SpeakerVerify.clearEnrollment(); renderSvPanel(); };
+        clearBtn.onclick = () => {
+            if (window.SpeakerVerify) window.SpeakerVerify.clearEnrollment();         // clear WHO
+            wakeWords.map((w) => w.replace(/ /g, "-")).forEach((n) => heyBuddy.clearVoiceprint && heyBuddy.clearVoiceprint(n)); // clear WHAT
+            voiceprints = {}; saveVoiceprints(voiceprints);                            // clear WHAT storage
+            renderSvPanel();
+        };
         row.appendChild(enrollBtn); row.appendChild(clearBtn);
         svPanel.appendChild(row);
     }
