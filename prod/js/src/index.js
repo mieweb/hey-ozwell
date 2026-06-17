@@ -127,22 +127,93 @@ document.addEventListener("DOMContentLoaded", async () => {
      *    "active" = actually suppresses junk fires
      *  Start in "shadow" to see its calls on your live speech, then flip to "active". */
     const VERIFIER_MODE = "active"; // "off" | "shadow" | "active"  (shadow = capture/A-B without suppressing)
+    // Per-user ENROLLMENT (similarity, on-device). If the user has enrolled a phrase, use their personal
+    // similarity check for it; otherwise fall back to the general trained verifier (the floor).
+    const enrollment = new Enrollment({ threshold: 0.55, repsPerPhrase: 4, debug: true });
+    if (typeof window !== "undefined") window.__enrollment = enrollment; // live-tune: window.__enrollment.threshold = 0.6
     if (VERIFIER_MODE !== "off" && typeof AcousticVerifier !== "undefined") {
-        // Only the stop phrase has a verifier so far (it's the one that over-fires / cuts off dictation).
-        // hey-ozwell passes through untouched until we train/export its verifier.
-        options.verifier = new AcousticVerifier(
+        const general = new AcousticVerifier(
             {
                 "ozwell-i'm-done": { modelPath: "../models/ozwell-i'm-done-verifier.onnx", threshold: 0.65 },
                 "hey-ozwell":      { modelPath: "../models/hey-ozwell-verifier.onnx",      threshold: 0.65 },
             },
             { debug: true }
         );
+        // Combined verifier: enrolled phrase -> personal similarity; else -> general floor.
+        options.verifier = {
+            lastScore: null,
+            async verify(audio, name, emb) {
+                if (enrollment.isEnrolled(name)) {
+                    const ok = enrollment.verify(audio, name, emb);
+                    this.lastScore = enrollment.lastScore;
+                    if (this.debug) console.log(`🧑 enrolled-verify ${name}: ${ok ? "CONFIRM" : "reject"} (cos ${this.lastScore?.toFixed(3)})`);
+                    return ok;
+                }
+                const ok = await general.verify(audio, name, emb);
+                this.lastScore = general.lastScore;
+                return ok;
+            },
+            debug: true,
+        };
         options.verifierShadow = (VERIFIER_MODE === "shadow");
-        console.log(`🔬 acoustic verifier mode: ${VERIFIER_MODE}`);
+        console.log(`🔬 verifier mode: ${VERIFIER_MODE} | enrolled: ${["hey-ozwell","ozwell-i'm-done"].filter(n=>enrollment.isEnrolled(n)).join(", ")||"none"}`);
     }
 
     /** Instantiate */
     const heyBuddy = new HeyBuddy(options);
+
+    /** Voice enrollment UI (demo): record a few reps per phrase -> personal on-device similarity check.
+     *  Each rep stores the PEAK window of the utterance (cleanest full-phrase moment). */
+    const ePanel = document.createElement("div");
+    ePanel.style.cssText = "margin:4px 0 16px;padding:12px 14px;border:1px solid rgba(39,170,225,.4);border-radius:12px;background:rgba(39,170,225,.06)";
+    const eHead = document.createElement("div");
+    eHead.style.cssText = "font:600 12px system-ui,sans-serif;letter-spacing:.08em;color:#27aae1;margin-bottom:8px;text-transform:none;position:static;max-width:none;text-align:left";
+    eHead.textContent = "Voice enrollment (personalize on-device)";
+    const eStatus = document.createElement("div");
+    eStatus.style.cssText = "font:500 14px system-ui,sans-serif;color:#e6edf3;margin-bottom:10px;min-height:20px";
+    const eBtns = document.createElement("div");
+    eBtns.style.cssText = "display:flex;gap:8px;flex-wrap:wrap";
+    ePanel.append(eHead, eStatus, eBtns);
+    graphsContainer.parentNode.insertBefore(ePanel, graphsContainer);
+
+    const PHRASES = ["hey-ozwell", "ozwell-i'm-done"];
+    const REPS = enrollment.repsPerPhrase;
+    const pn = (n) => n.replace(/-/g, " ");
+    const refreshStatus = () => {
+        eStatus.textContent = PHRASES.map(n => `${pn(n)}: ${enrollment.count(n) >= REPS ? "✓ enrolled" : enrollment.count(n) + "/" + REPS}`).join("    ·    ");
+    };
+    let enrolling = false;
+    const enrollPhrase = (name) => {
+        if (enrolling) return;
+        enrolling = true;
+        enrollment.clear(name);
+        eStatus.textContent = `Say “${pn(name)}” — 0/${REPS}`;
+        let got = 0;
+        heyBuddy.startEnroll(name, (emb) => {
+            enrollment.addTemplate(name, emb);
+            got++;
+            if (got >= REPS) {
+                heyBuddy.stopEnroll(); enrolling = false;
+                eStatus.textContent = `✓ enrolled “${pn(name)}” (${got} reps) — now verified by your voice`;
+                refreshStatus();
+            } else {
+                eStatus.textContent = `Say “${pn(name)}” again — ${got}/${REPS}`;
+            }
+        });
+    };
+    for (const name of PHRASES) {
+        const b = document.createElement("button");
+        b.textContent = `Enroll “${pn(name)}”`;
+        b.style.cssText = "padding:8px 12px;border-radius:8px;border:1px solid #27aae1;background:transparent;color:#27aae1;font:600 13px system-ui,sans-serif;cursor:pointer";
+        b.onclick = () => enrollPhrase(name);
+        eBtns.appendChild(b);
+    }
+    const clr = document.createElement("button");
+    clr.textContent = "Clear enrollment";
+    clr.style.cssText = "padding:8px 12px;border-radius:8px;border:1px solid #6b7280;background:transparent;color:#9aa6b2;font:600 13px system-ui,sans-serif;cursor:pointer";
+    clr.onclick = () => { heyBuddy.stopEnroll(); enrolling = false; enrollment.clear(); refreshStatus(); };
+    eBtns.appendChild(clr);
+    refreshStatus();
 
     /** Add callbacks */
 

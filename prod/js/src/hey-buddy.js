@@ -8,6 +8,7 @@ import {
     WakeWord
 } from "./models.js";
 import { AcousticVerifier } from "./models/acoustic-verifier.js";
+import { Enrollment } from "./models/enrollment.js";
 
 /**
  * Combines an array of embedding buffers into a single embedding tensor.
@@ -87,6 +88,10 @@ export class HeyBuddy {
         this.verifierShadow = options.verifierShadow || false;
         this.verifierAudioSamples = Math.round((options.verifierAudioSeconds || 2.0) * 16000);
         this.recentAudio = new Float32Array(0); // rolling raw-audio buffer for the verifier
+        // Enrollment: when set via startEnroll(name, onCapture), track the PEAK (highest stage-1)
+        // embedding per utterance and hand it to onCapture at speech end (one clean template per rep).
+        this.enroll = null;
+        this._enrollPeak = { score: 0, emb: null };
         this.wakeWordInterval = options.wakeWordInterval || 2.0; // How often a wake word can be uttered
 
         // Get options or use defaults for models
@@ -194,6 +199,15 @@ export class HeyBuddy {
     }
 
     /**
+     * Begin enrollment for a phrase: the peak embedding of each spoken rep is handed to onCapture.
+     * @param {string} name - wake word stem (e.g. "hey-ozwell").
+     * @param {Function} onCapture - called (embeddingFloat32, peakScore) once per spoken rep at speech end.
+     */
+    startEnroll(name, onCapture) { this.enroll = { name, onCapture }; this._enrollPeak = { score: 0, emb: null }; }
+    /** Stop enrollment capture. */
+    stopEnroll() { this.enroll = null; this._enrollPeak = { score: 0, emb: null }; }
+
+    /**
      * Add a callback for processed data.
      * @param {Function} callback - Callback function.
      */
@@ -244,6 +258,11 @@ export class HeyBuddy {
         if (this.debug) {
             console.log("Speech end");
         }
+        // Enrollment: at the end of an utterance, hand the peak embedding to the capture callback (one rep).
+        if (this.enroll && this._enrollPeak.emb && this._enrollPeak.score >= 0.3) {
+            this.enroll.onCapture(this._enrollPeak.emb, this._enrollPeak.score);
+        }
+        this._enrollPeak = { score: 0, emb: null };
         for (let callback of this.speechEndCallbacks) {
             callback();
         }
@@ -342,6 +361,13 @@ export class HeyBuddy {
             if (r.probability >= this.wakeWords[name].threshold) {
                 const db = this.wakeWords[name].debounceFrames || 1;
                 console.log(`${r.detected ? "🔔 FIRED" : "🔇 suppressed"} ${name} prob=${r.probability.toFixed(2)} run=${r.run}/${db}`);
+            }
+        }
+        // Enrollment: track the peak (highest stage-1 probability) embedding for the phrase being enrolled.
+        if (this.enroll && returnMap[this.enroll.name]) {
+            const p = returnMap[this.enroll.name].probability;
+            if (p > this._enrollPeak.score) {
+                this._enrollPeak = { score: p, emb: Float32Array.from(this.embeddingBuffer.data) };
             }
         }
         let best = null;
@@ -493,4 +519,5 @@ export class HeyBuddy {
 if (typeof window !== "undefined") {
     window.HeyBuddy = HeyBuddy;
     window.AcousticVerifier = AcousticVerifier;  // stage-2 ACOUSTIC verifier (embedding MLP — the one we ship)
+    window.Enrollment = Enrollment;              // per-user on-device enrollment (similarity)
 }
