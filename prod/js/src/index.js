@@ -180,7 +180,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const gateBox = document.createElement("div");
     gateBox.style = "margin:1em 0;padding:0.6em 0.75em;border:1px solid #2b3a4a;border-radius:6px;" +
                     "font-family:monospace;font-size:12px;color:#9fb6cc;background:#0b1622";
-    gateBox.innerHTML = "<b style='color:#cde'>Gate scores</b> — WHO(voice)=speaker · WHAT(phrase)=voiceprint cosine (thr 0.88) · newest first";
+    gateBox.innerHTML = "<b style='color:#cde'>Gate scores</b> — WHO(voice)=speaker (thr 0.4) · WHAT(phrase)=voiceprint cosine (thr 0.8) · newest first";
     const gateRows = document.createElement("div");
     gateRows.style = "margin-top:6px";
     gateBox.appendChild(gateRows);
