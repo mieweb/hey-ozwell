@@ -357,11 +357,17 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     async function enrollDoctor(btn) {
         const sv = window.SpeakerVerify;
-        if (!sv) return;
         btn.disabled = true; window.__ozEnrollActive = true; // suppress wake drives while enrolling
         const st = () => document.getElementById("sv-status");
         try {
-            st().textContent = "loading verifier…"; await sv.ready();
+            // Best-effort load the speaker model (WHO). If its WASM is missing, DON'T hang — still
+            // enroll the phrase voiceprint (WHAT). So the precision gate is testable without TitaNet.
+            let svOk = false;
+            if (sv) {
+                st().textContent = "loading verifier…";
+                try { await Promise.race([sv.ready(), new Promise((_, rej) => setTimeout(() => rej(new Error("sv timeout")), 8000))]); svOk = sv.isLoaded(); }
+                catch (e) { console.warn("[enroll] speaker model unavailable — enrolling phrase voiceprint only:", e); }
+            }
             for (const ph of ENROLL_PHRASES) {
                 const clips = [];
                 const vecs = []; // fire-time embeddings -> phrase voiceprint (WHAT precision gate)
@@ -374,14 +380,16 @@ document.addEventListener("DOMContentLoaded", async () => {
                     if (res.embedding) vecs.push(res.embedding);
                     st().textContent = "✓ got it"; await svSleep(1200); // let the ~2s wake cooldown pass before the next
                 }
-                sv.enroll(ph.name, clips);              // WHO: speaker voiceprint (only the doctor acts)
-                if (vecs.length) {                       // WHAT: phrase voiceprint (reject the doctor's own false fires)
+                if (svOk) sv.enroll(ph.name, clips);     // WHO: speaker voiceprint (only the doctor acts) — if model loaded
+                if (vecs.length) {                       // WHAT: phrase voiceprint (reject the doctor's own false fires) — always
                     heyBuddy.setVoiceprint(ph.name, vecs);
                     voiceprints[ph.name] = vecs;
                     saveVoiceprints(voiceprints);
                 }
             }
-            st().textContent = "✅ enrolled both phrases — speaker + phrase voiceprints set (one enrollment, both gates).";
+            st().textContent = svOk
+                ? "✅ enrolled both phrases — speaker + phrase voiceprints set (one enrollment, both gates)."
+                : "✅ enrolled both phrases — phrase voiceprint set (precision gate). Speaker model not loaded — WHO gate off.";
         } catch (e) {
             st().textContent = "error: " + e;
         } finally {
