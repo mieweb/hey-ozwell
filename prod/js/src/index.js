@@ -204,10 +204,24 @@ document.addEventListener("DOMContentLoaded", async () => {
     // doctor's voice acts on it.
     let pendingWake = null;
     let svCapture = null; // { targetName, resolve } while enrollment is waiting for an utterance
-    // WHAT-precision reject threshold: a fire whose phrase-voiceprint similarity is below this is a
-    // false fire (the doctor's own non-phrase speech). Tune live with window.__wakeRejectSim — the
-    // enrolled phrase peaks high (~0.85), the other phrase / junk lands lower. Start conservative.
-    const WAKE_REJECT_SIM = 0.55;
+    // WHAT-precision reject threshold on RAW cosine (the metric validated on the demo branch): real
+    // wakes ~0.92, near-misses ≤0.82 → 0.88 sits in the gap. Tune live with window.__wakeRejectSim.
+    const WAKE_REJECT_SIM = 0.88;
+    // Raw cosine (no background-mean subtraction — matches the demo's validated metric, NOT the
+    // product's voiceprintSimilarity) of a wake embedding to the phrase's enrolled voiceprints (max).
+    function phraseCosine(name, vec) {
+        const set = heyBuddy.voiceprints && heyBuddy.voiceprints[name];
+        if (!set || !set.length || !vec) return null;
+        let qn = 0; for (let i = 0; i < vec.length; i++) qn += vec[i] * vec[i]; qn = Math.sqrt(qn) + 1e-9;
+        let best = -1;
+        for (const t of set) {
+            let d = 0, tn = 0;
+            for (let i = 0; i < vec.length; i++) { d += vec[i] * t[i]; tn += t[i] * t[i]; }
+            const c = d / (qn * (Math.sqrt(tn) + 1e-9));
+            if (c > best) best = c;
+        }
+        return best;
+    }
     heyBuddy.onDetected("hey-ozwell", () => {
         pendingWake = { name: "hey-ozwell", content: "Hey Ozwell — a clinician just started a session.",
                         label: "🔔 <b>“hey ozwell” detected</b>" };
@@ -268,7 +282,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         let sim = null;
         const rej = (typeof window.__wakeRejectSim === "number") ? window.__wakeRejectSim : WAKE_REJECT_SIM;
         if (heyBuddy.hasVoiceprint(name) && heyBuddy.lastWakeEmbedding) {
-            sim = heyBuddy.voiceprintSimilarity(name, heyBuddy.lastWakeEmbedding);
+            sim = phraseCosine(name, heyBuddy.lastWakeEmbedding);
         }
         const whoStr  = v        ? `WHO(voice) ${v.score.toFixed(2)} ${v.pass ? "✓" : "✗"}`        : `WHO(voice) —off`;
         const whatStr = sim != null ? `WHAT(phrase) ${sim.toFixed(2)} ${sim >= rej ? "✓" : "✗"}` : `WHAT(phrase) —off`;
