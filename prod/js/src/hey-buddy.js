@@ -91,7 +91,7 @@ export class HeyBuddy {
         // Enrollment: when set via startEnroll(name, onCapture), track the PEAK (highest stage-1)
         // embedding per utterance and hand it to onCapture at speech end (one clean template per rep).
         this.enroll = null;
-        this._enrollPeak = { score: 0, emb: null };
+        this._lastEnrollCap = 0;
         this.wakeWordInterval = options.wakeWordInterval || 2.0; // How often a wake word can be uttered
 
         // Get options or use defaults for models
@@ -203,7 +203,7 @@ export class HeyBuddy {
      * @param {string} name - wake word stem (e.g. "hey-ozwell").
      * @param {Function} onCapture - called (embeddingFloat32, peakScore) once per spoken rep at speech end.
      */
-    startEnroll(name, onCapture, minScore) { this.enroll = { name, onCapture, minScore: minScore ?? null }; this._enrollPeak = { score: 0, emb: null }; this._enrollFresh = false; }
+    startEnroll(name, onCapture, minScore) { this.enroll = { name, onCapture, minScore: minScore ?? null }; this._lastEnrollCap = 0; }
     /** Stop enrollment capture. */
     stopEnroll() { this.enroll = null; this._enrollPeak = { score: 0, emb: null }; }
 
@@ -246,7 +246,6 @@ export class HeyBuddy {
         if (this.debug) {
             console.log("Speech start");
         }
-        if (this.enroll) this._enrollFresh = true; // mark this as a NEW utterance (one rep per fresh utterance)
         for (let callback of this.speechStartCallbacks) {
             callback();
         }
@@ -259,21 +258,6 @@ export class HeyBuddy {
         if (this.debug) {
             console.log("Speech end");
         }
-        // Enrollment: at the end of an utterance, hand the peak embedding to the capture callback (one rep) —
-        // ONLY if the base model actually recognized it as the phrase (peak >= the phrase's operating
-        // threshold). This prevents enrolling a random/wrong phrase: stage-1 must accept it first.
-        if (this.enroll && this._enrollPeak.emb) {
-            const need = this.enroll.minScore ?? (this.wakeWords[this.enroll.name]?.threshold ?? 0.5);
-            // Require: a FRESH utterance (new speech-start since last rep) AND stage-1 actually recognized it.
-            // The fresh-utterance rule stops one saying / trailing audio / VAD flaps from counting twice.
-            if (this._enrollFresh && this._enrollPeak.score >= need) {
-                this.enroll.onCapture(this._enrollPeak.emb, this._enrollPeak.score);
-            } else if (this.debug) {
-                console.log(`[enroll] rep not counted: fresh=${this._enrollFresh} stage-1 ${this._enrollPeak.score.toFixed(2)} (need >=${need}, a new clear utterance)`);
-            }
-        }
-        this._enrollFresh = false; // consumed; next rep needs a brand-new speech-start
-        this._enrollPeak = { score: 0, emb: null };
         for (let callback of this.speechEndCallbacks) {
             callback();
         }
@@ -374,11 +358,15 @@ export class HeyBuddy {
                 console.log(`${r.detected ? "🔔 FIRED" : "🔇 suppressed"} ${name} prob=${r.probability.toFixed(2)} run=${r.run}/${db}`);
             }
         }
-        // Enrollment: track the peak (highest stage-1 probability) embedding for the phrase being enrolled.
+        // Enrollment: capture ONE template each time the base model recognizes the phrase (>= gate),
+        // debounced by 1.5s so one saying = one rep. Simple and robust — no peak/speech-end/flag juggling.
         if (this.enroll && returnMap[this.enroll.name]) {
             const p = returnMap[this.enroll.name].probability;
-            if (p > this._enrollPeak.score) {
-                this._enrollPeak = { score: p, emb: Float32Array.from(this.embeddingBuffer.data) };
+            const gate = this.enroll.minScore ?? (this.wakeWords[this.enroll.name]?.threshold ?? 0.5);
+            const now = Date.now();
+            if (p >= gate && (now - this._lastEnrollCap) >= 1500) {
+                this._lastEnrollCap = now;
+                this.enroll.onCapture(Float32Array.from(this.embeddingBuffer.data), p);
             }
         }
         let best = null;

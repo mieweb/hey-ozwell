@@ -204,15 +204,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         enrollment.clear(name);
         refreshStatus();               // FIX: reflect cleared state on the marker immediately (no stale "enrolled")
         let got = 0;
-        let lastCap = 0;
-        let armed = true;              // only accept a capture when armed (one per prompt)
-        const prompt = () => { armed = true; eStatus.textContent = `🔵 Say “${pn(name)}” now — ${got}/${REPS}`; chime(); };
+        const prompt = () => { eStatus.textContent = `🔵 Say “${pn(name)}” now — ${got}/${REPS}`; chime(); };
         prompt();
+        // hey-buddy fires onCapture once per recognized saying (>= gate, debounced 1.5s).
         heyBuddy.startEnroll(name, (emb, score) => {
-            const now = Date.now();
-            // One rep per distinct, paced saying: must be armed AND >=1.2s since the last accepted rep.
-            // Stops a single utterance (or VAD flap / lingering audio) from counting as multiple reps.
-            if (!armed || now - lastCap < 1200) return;
             // Consistency: each rep after the first must resemble the first (same phrase), else don't count.
             if (got > 0) {
                 const sim = enrollment.score(name, emb);
@@ -222,18 +217,16 @@ document.addEventListener("DOMContentLoaded", async () => {
                     return;
                 }
             }
-            armed = false;             // disarm until the next prompt
-            lastCap = now;
             enrollment.addTemplate(name, emb);
             got++;
-            refreshStatus();           // update marker every step
+            refreshStatus();
             if (got >= REPS) {
                 heyBuddy.stopEnroll(); enrolling = false;
                 eStatus.textContent = `✓ enrolled “${pn(name)}” (${got} reps) — now verified by your voice`;
-                chime(1320, 0.18);     // success tone
+                chime(1320, 0.18);
             } else {
-                eStatus.textContent = `✓ got rep ${got}/${REPS} (${Math.round(score * 100)}%) — pause…`;
-                setTimeout(prompt, 800);   // pause, then chime + prompt for the next distinct rep
+                eStatus.textContent = `✓ got rep ${got}/${REPS} (${Math.round(score * 100)}%) — pause, then say it again`;
+                setTimeout(prompt, 800);
             }
         }, ENROLL_GATE);
     };
