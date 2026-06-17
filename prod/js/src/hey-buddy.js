@@ -258,9 +258,16 @@ export class HeyBuddy {
         if (this.debug) {
             console.log("Speech end");
         }
-        // Enrollment: at the end of an utterance, hand the peak embedding to the capture callback (one rep).
-        if (this.enroll && this._enrollPeak.emb && this._enrollPeak.score >= 0.3) {
-            this.enroll.onCapture(this._enrollPeak.emb, this._enrollPeak.score);
+        // Enrollment: at the end of an utterance, hand the peak embedding to the capture callback (one rep) —
+        // ONLY if the base model actually recognized it as the phrase (peak >= the phrase's operating
+        // threshold). This prevents enrolling a random/wrong phrase: stage-1 must accept it first.
+        if (this.enroll && this._enrollPeak.emb) {
+            const need = this.wakeWords[this.enroll.name]?.threshold ?? 0.5;
+            if (this._enrollPeak.score >= need) {
+                this.enroll.onCapture(this._enrollPeak.emb, this._enrollPeak.score);
+            } else if (this.debug) {
+                console.log(`[enroll] rep not counted: stage-1 ${this._enrollPeak.score.toFixed(2)} < ${need} (say the phrase clearly)`);
+            }
         }
         this._enrollPeak = { score: 0, emb: null };
         for (let callback of this.speechEndCallbacks) {
