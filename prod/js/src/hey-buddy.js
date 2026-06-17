@@ -203,9 +203,9 @@ export class HeyBuddy {
      * @param {string} name - wake word stem (e.g. "hey-ozwell").
      * @param {Function} onCapture - called (embeddingFloat32, peakScore) once per spoken rep at speech end.
      */
-    startEnroll(name, onCapture, minScore) { this.enroll = { name, onCapture, minScore: minScore ?? null }; this._lastEnrollCap = 0; }
+    startEnroll(name, onCapture, minScore, onMiss) { this.enroll = { name, onCapture, minScore: minScore ?? null, onMiss }; this._lastEnrollCap = 0; this._enrollCapturedSeg = false; }
     /** Stop enrollment capture. */
-    stopEnroll() { this.enroll = null; this._enrollPeak = { score: 0, emb: null }; }
+    stopEnroll() { this.enroll = null; this._enrollCapturedSeg = false; }
 
     /**
      * Add a callback for processed data.
@@ -246,6 +246,7 @@ export class HeyBuddy {
         if (this.debug) {
             console.log("Speech start");
         }
+        if (this.enroll) this._enrollCapturedSeg = false; // reset per utterance (for miss feedback)
         for (let callback of this.speechStartCallbacks) {
             callback();
         }
@@ -258,6 +259,8 @@ export class HeyBuddy {
         if (this.debug) {
             console.log("Speech end");
         }
+        // Enrollment: if the user spoke but nothing qualified this utterance, tell them to try again.
+        if (this.enroll && !this._enrollCapturedSeg && this.enroll.onMiss) this.enroll.onMiss();
         for (let callback of this.speechEndCallbacks) {
             callback();
         }
@@ -366,6 +369,7 @@ export class HeyBuddy {
             const now = Date.now();
             if (p >= gate && (now - this._lastEnrollCap) >= 1500) {
                 this._lastEnrollCap = now;
+                this._enrollCapturedSeg = true;
                 this.enroll.onCapture(Float32Array.from(this.embeddingBuffer.data), p);
             }
         }

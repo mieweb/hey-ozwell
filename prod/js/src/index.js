@@ -195,7 +195,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             o.start(t); o.stop(t + dur);
         } catch (e) {}
     };
-    const ENROLL_GATE = 0.85;          // base model must be quite sure it's the phrase (rejects FP garbage)
+    const ENROLL_GATE = 0.75;          // base model must recognize it as the phrase; low enough to capture genuine reps reliably (hey operates at 0.8)
     const CONSISTENCY = 0.5;           // later reps must resemble the first (cosine) — same phrase each time
     let enrolling = false;
     const enrollPhrase = (name) => {
@@ -228,7 +228,10 @@ document.addEventListener("DOMContentLoaded", async () => {
                 eStatus.textContent = `✓ got rep ${got}/${REPS} (${Math.round(score * 100)}%) — pause, then say it again`;
                 setTimeout(prompt, 800);
             }
-        }, ENROLL_GATE);
+        }, ENROLL_GATE, () => {
+            // miss: user spoke but it didn't register as the phrase
+            if (enrolling) { eStatus.textContent = `⚠️ didn’t catch that — say “${pn(name)}” again, clearly (${got}/${REPS})`; chime(440, 0.18); }
+        });
     };
     for (const name of PHRASES) {
         const b = document.createElement("button");
