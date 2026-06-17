@@ -203,7 +203,7 @@ export class HeyBuddy {
      * @param {string} name - wake word stem (e.g. "hey-ozwell").
      * @param {Function} onCapture - called (embeddingFloat32, peakScore) once per spoken rep at speech end.
      */
-    startEnroll(name, onCapture, minScore) { this.enroll = { name, onCapture, minScore: minScore ?? null }; this._enrollPeak = { score: 0, emb: null }; }
+    startEnroll(name, onCapture, minScore) { this.enroll = { name, onCapture, minScore: minScore ?? null }; this._enrollPeak = { score: 0, emb: null }; this._enrollFresh = false; }
     /** Stop enrollment capture. */
     stopEnroll() { this.enroll = null; this._enrollPeak = { score: 0, emb: null }; }
 
@@ -246,6 +246,7 @@ export class HeyBuddy {
         if (this.debug) {
             console.log("Speech start");
         }
+        if (this.enroll) this._enrollFresh = true; // mark this as a NEW utterance (one rep per fresh utterance)
         for (let callback of this.speechStartCallbacks) {
             callback();
         }
@@ -263,12 +264,15 @@ export class HeyBuddy {
         // threshold). This prevents enrolling a random/wrong phrase: stage-1 must accept it first.
         if (this.enroll && this._enrollPeak.emb) {
             const need = this.enroll.minScore ?? (this.wakeWords[this.enroll.name]?.threshold ?? 0.5);
-            if (this._enrollPeak.score >= need) {
+            // Require: a FRESH utterance (new speech-start since last rep) AND stage-1 actually recognized it.
+            // The fresh-utterance rule stops one saying / trailing audio / VAD flaps from counting twice.
+            if (this._enrollFresh && this._enrollPeak.score >= need) {
                 this.enroll.onCapture(this._enrollPeak.emb, this._enrollPeak.score);
             } else if (this.debug) {
-                console.log(`[enroll] rep not counted: stage-1 ${this._enrollPeak.score.toFixed(2)} < ${need} (say the phrase clearly)`);
+                console.log(`[enroll] rep not counted: fresh=${this._enrollFresh} stage-1 ${this._enrollPeak.score.toFixed(2)} (need >=${need}, a new clear utterance)`);
             }
         }
+        this._enrollFresh = false; // consumed; next rep needs a brand-new speech-start
         this._enrollPeak = { score: 0, emb: null };
         for (let callback of this.speechEndCallbacks) {
             callback();

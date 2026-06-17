@@ -208,7 +208,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         let armed = true;              // only accept a capture when armed (one per prompt)
         const prompt = () => { armed = true; eStatus.textContent = `🔵 Say “${pn(name)}” now — ${got}/${REPS}`; chime(); };
         prompt();
-        heyBuddy.startEnroll(name, (emb) => {
+        heyBuddy.startEnroll(name, (emb, score) => {
             const now = Date.now();
             // One rep per distinct, paced saying: must be armed AND >=1.2s since the last accepted rep.
             // Stops a single utterance (or VAD flap / lingering audio) from counting as multiple reps.
@@ -232,7 +232,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 eStatus.textContent = `✓ enrolled “${pn(name)}” (${got} reps) — now verified by your voice`;
                 chime(1320, 0.18);     // success tone
             } else {
-                eStatus.textContent = `✓ got rep ${got}/${REPS} — pause…`;
+                eStatus.textContent = `✓ got rep ${got}/${REPS} (${Math.round(score * 100)}%) — pause…`;
                 setTimeout(prompt, 800);   // pause, then chime + prompt for the next distinct rep
             }
         }, ENROLL_GATE);
