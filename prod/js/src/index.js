@@ -227,7 +227,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     let svCapture = null; // { targetName, resolve } while enrollment is waiting for an utterance
     // WHAT-precision reject threshold on RAW cosine (the metric validated on the demo branch): real
     // wakes ~0.92, near-misses ≤0.82 → 0.88 sits in the gap. Tune live with window.__wakeRejectSim.
-    const WAKE_REJECT_SIM = 0.88;
+    const WAKE_REJECT_SIM = 0.8;
     // Raw cosine (no background-mean subtraction — matches the demo's validated metric, NOT the
     // product's voiceprintSimilarity) of a wake embedding to the phrase's enrolled voiceprints (max).
     function phraseCosine(name, vec) {
@@ -420,11 +420,13 @@ document.addEventListener("DOMContentLoaded", async () => {
                 const vecs = []; // fire-time embeddings -> phrase voiceprint (WHAT precision gate)
                 while (clips.length < SV_N_ENROLL) {
                     st().innerHTML = `🗣️ <b>say “${ph.label}”</b> &nbsp;<span style='color:#9fb6cc'>(sample ${clips.length + 1}/${SV_N_ENROLL})</span>`;
+                    beep(660); await svSleep(180); // "speak now" cue (let the chime finish before they talk)
                     const res = await captureWakeUtterance(ph.name);
                     if (!res) { st().innerHTML = `⏳ didn’t catch “${ph.label}” — say it again, clearly`; await svSleep(700); continue; }
                     if (res.wrong) { st().innerHTML = `❌ that was the other phrase — please say “${ph.label}”`; await svSleep(900); continue; }
                     clips.push({ samples: res.audio, sampleRate: 16000 });
                     if (res.embedding) vecs.push(res.embedding);
+                    beep(990); // "got it" confirmation chime
                     st().textContent = "✓ got it"; await svSleep(1200); // let the ~2s wake cooldown pass before the next
                 }
                 if (svOk) sv.enroll(ph.name, clips);     // WHO: speaker voiceprint (only the doctor acts) — if model loaded

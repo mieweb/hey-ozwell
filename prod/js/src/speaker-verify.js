@@ -21,8 +21,10 @@
   const MODEL = "./nemo_en_titanet_small.onnx"; // preloaded into the WASM filesystem
   const LS_KEY = "ozwellDoctorVoiceprint";       // { centroid: number[], n: number }
   // Threshold from the spike's enroll-centroid distributions (genuine ~0.75 / impostor ~0.22).
-  // Re-tune live with the readout — synthetic voices are optimistic vs real ones.
-  const DEFAULT_THRESHOLD = 0.5;
+  // Lowered 0.5→0.4 (2026-06-17): background noise drags the genuine doctor down to ~0.3-0.4 while
+  // impostors stay ~0.03-0.22, so 0.4 keeps the doctor in noise and still rejects impostors with margin.
+  // Re-tune live: window.SpeakerVerify.threshold = 0.35 for heavy noise (don't go below ~0.3 — impostors).
+  const DEFAULT_THRESHOLD = 0.4;
 
   let Module = null, handle = 0, dim = 0;
   let readyResolve, readyReject;
