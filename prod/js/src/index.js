@@ -129,7 +129,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const VERIFIER_MODE = "active"; // "off" | "shadow" | "active"  (shadow = capture/A-B without suppressing)
     // Per-user ENROLLMENT (similarity, on-device). If the user has enrolled a phrase, use their personal
     // similarity check for it; otherwise fall back to the general trained verifier (the floor).
-    const enrollment = new Enrollment({ threshold: 0.55, repsPerPhrase: 3, debug: true });
+    const enrollment = new Enrollment({ threshold: 0.80, repsPerPhrase: 3, debug: true });
     if (typeof window !== "undefined") window.__enrollment = enrollment; // live-tune: window.__enrollment.threshold = 0.6
     if (VERIFIER_MODE !== "off" && typeof AcousticVerifier !== "undefined") {
         const general = new AcousticVerifier(
