@@ -261,50 +261,48 @@ document.addEventListener("DOMContentLoaded", async () => {
             // [latency] wake-detection per-frame compute (the <250ms target) + one-shot speaker verify
             console.log(`[latency] ${name}: wake-frame ~${heyBuddy.frameTimeEma.toFixed(0)}ms | speaker-verify ${(performance.now() - t0).toFixed(0)}ms | score ${v.score.toFixed(2)} pass ${v.pass}`);
         }
-        const tag = v ? ` (${v.score.toFixed(2)})` : "";
-
-        // STAGE-2 (WHAT precision): speaker-verify confirms WHO spoke, but the doctor's OWN
-        // conversation still false-fires (it's their voice → it passes). So re-check WHAT was said
-        // ACOUSTICALLY: compare the fire-time embedding window to THIS phrase's enrolled voiceprint
-        // and reject if it doesn't match the phrase. Replaces the old Whisper transcript gate (which
-        // failed: "ozwell" is made-up so ASR hallucinated). On-device, no extra model. Per-user; tune
-        // WAKE_REJECT_SIM live (window.__wakeRejectSim). Only active once the phrase is enrolled.
+        // --- Compute BOTH gate scores up front so we can SHOW them in one readout ---
+        // WHO (speaker/TitaNet): is it the enrolled doctor's voice. WHAT (phrase voiceprint cosine):
+        // did they actually say the phrase. Different references — a wake can pass one and fail the
+        // other; that's expected, NOT a contradiction. Each gate shows "— off" until enrolled.
+        let sim = null;
+        const rej = (typeof window.__wakeRejectSim === "number") ? window.__wakeRejectSim : WAKE_REJECT_SIM;
         if (heyBuddy.hasVoiceprint(name) && heyBuddy.lastWakeEmbedding) {
-            const sim = heyBuddy.voiceprintSimilarity(name, heyBuddy.lastWakeEmbedding);
-            const rej = (typeof window.__wakeRejectSim === "number") ? window.__wakeRejectSim : WAKE_REJECT_SIM;
-            if (sim < rej) {
-                integ.innerHTML = `${label} → 🛑 <b>not the phrase</b> (voiceprint ${sim.toFixed(2)}) — ignored`;
-                console.log(`🛑 stage-2 (voiceprint) rejected ${name}: sim ${sim.toFixed(2)} < ${rej}`);
-                return;
-            }
-            console.log(`✅ stage-2 (voiceprint) confirmed ${name}: sim ${sim.toFixed(2)}`);
+            sim = heyBuddy.voiceprintSimilarity(name, heyBuddy.lastWakeEmbedding);
+        }
+        const whoStr  = v        ? `WHO(voice) ${v.score.toFixed(2)} ${v.pass ? "✓" : "✗"}`        : `WHO(voice) —off`;
+        const whatStr = sim != null ? `WHAT(phrase) ${sim.toFixed(2)} ${sim >= rej ? "✓" : "✗"}` : `WHAT(phrase) —off`;
+        const gates = `<div style="font-size:12px;color:#9fb6cc;margin-top:4px">${whoStr} &nbsp;·&nbsp; ${whatStr}</div>`;
+        console.log(`[gates] ${name} → WHO ${v ? v.score.toFixed(2) + (v.pass ? " pass" : " FAIL") : "off"} | WHAT ${sim != null ? sim.toFixed(2) + (sim >= rej ? " pass" : " FAIL") : "off"}`);
+
+        // WHAT precision: reject the doctor's own non-phrase false fires (it's their voice, so WHO
+        // passes, but it isn't the phrase). Replaces the dead Whisper transcript gate.
+        if (sim != null && sim < rej) {
+            integ.innerHTML = `${label} → 🛑 <b>not the phrase</b> — ignored ${gates}`;
+            return;
         }
 
         // During an active dictation session, only a verified "ozwell i'm done" ends it.
         if (sessionActive) {
             if (name === "ozwell-i'm-done" && v && v.pass) {
-                // Trim the measured stop utterance (minus a 0.6s safety margin) off the audio so
-                // Whisper barely sees the stop phrase; the text-stripper cleans any fragment. The
-                // margin keeps alignment slop on the safe side. (Chosen over text-only after testing.)
                 const trimSamples = Math.max(0, audioSamples.length - Math.round(0.6 * 16000));
                 stopAndTranscribe(true, trimSamples);
             } else showSessionUI();
             return;
         }
 
-        // Gate: if this phrase is enrolled, require the doctor; otherwise the gate is off.
+        // WHO gate: if enrolled, require the doctor's voice; otherwise off.
         if (v && !v.pass) {
-            integ.innerHTML = `${label} → 🔒 <b>not the enrolled doctor</b> (match${tag}) — ignored`;
+            integ.innerHTML = `${label} → 🔒 <b>not the enrolled doctor</b> — ignored ${gates}`;
             return;
         }
         if (name === "hey-ozwell") {
-            // START a dictation session: open Ozwell and record until "ozwell i'm done"/Stop.
-            integ.innerHTML = `${label} → ✅ <b>verified${tag}</b> → starting dictation…`;
+            integ.innerHTML = `${label} → ✅ <b>verified</b> → starting dictation… ${gates}`;
             if (ozwellReady) OzwellChat.open();
             beep(880); // "go" chime — session is live, start dictating now
             startSession();
-        } else { // stop phrase but no session running — nothing to end, don't inject anything
-            integ.innerHTML = `${label} → ✅ verified${tag} — no active dictation`;
+        } else {
+            integ.innerHTML = `${label} → ✅ verified — no active dictation ${gates}`;
         }
     }
     // ---------------------------------------------------------------------------
