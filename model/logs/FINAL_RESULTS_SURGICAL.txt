@@ -1,0 +1,35 @@
+=== ozwell-done balanced accent retrain Fri Jun 12 06:08:37 PM UTC 2026 ===
+>>> 129174 pos (base 127384 + 1790 balanced accent) / 160000 neg  [pos<neg? balanced]
+  train exit=0 (Fri Jun 12 07:26:37 PM UTC 2026)
+  exported checkpoints/scratch-onnx/ozwelldone_surgical.onnx
+### NO-REGRESSION: original config-C sets @0.5 (prod -> new) ###
+  American           n=100  prod= 92% -> new= 95%
+  acc en-AU          n= 12  prod=100% -> new=100%
+  acc en-GB          n= 16  prod= 94% -> new= 94%
+  acc en-IN          n= 12  prod= 83% -> new=100%
+  acc en-US          n= 23  prod= 96% -> new= 91%
+
+### NEW n=390 cross-vendor ElevenLabs @0.5 (prod -> new) ###
+  american    n= 64  prod= 84% -> new= 92%
+  australian  n= 64  prod= 92% -> new= 94%
+  british     n= 64  prod= 88% -> new= 91%
+  chinese     n= 20  prod= 70% -> new= 80%
+  filipino    n= 40  prod= 85% -> new= 95%
+  indian      n= 64  prod= 97% -> new= 97%
+  japanese    n=  6  prod= 50% -> new= 67%
+  korean      n=  2  prod=100% -> new=100%
+  latin       n= 40  prod= 78% -> new= 92%
+  spanish     n= 26  prod= 85% -> new= 88%
+  ALL         n=390  prod= 86% -> new= 92%
+
+>>> multi-source FP/hr (new model) @0.5:
+  [voxpopuli_test]:
+  0.5       4 fires =     2.7/hr            0 fires =     0.0/hr
+  [peoples_test]:
+  0.5       3 fires =     6.0/hr            1 fires =     2.0/hr
+  [thirdparty_ami]:
+  0.5       9 fires =    18.0/hr            1 fires =     2.0/hr
+  [combined]:
+  0.5      16 fires =     6.4/hr            2 fires =     0.8/hr
+
+=== SURGICAL DONE Fri Jun 12 07:33:43 PM UTC 2026 — adopt only if cross-vendor UP, originals HELD, FP HELD ===

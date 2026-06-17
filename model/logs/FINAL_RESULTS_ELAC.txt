@@ -1,0 +1,63 @@
+=== ElevenLabs accent retrain (both phrases, balanced) Fri Jun 12 02:20:24 AM UTC 2026 ===
+
+########## heyozwell_elac (hey ozwell) ##########
+>>> 131908 pos (incl 6006 accent) / 208000 neg (Fri Jun 12 02:20:28 AM UTC 2026)
+  train exit=0 (Fri Jun 12 03:36:41 AM UTC 2026)
+  exported checkpoints/scratch-onnx/heyozwell_elac.onnx
+  >>> held-out ElevenLabs accent recall:
+    american    n=10  @0.5=100%  @0.8=100%  @0.9= 90%
+    australian  n=10  @0.5=100%  @0.8=100%  @0.9=100%
+    british     n=10  @0.5=100%  @0.8=100%  @0.9=100%
+    chinese     n= 6  @0.5=100%  @0.8=100%  @0.9=100%
+    filipino    n=10  @0.5=100%  @0.8=100%  @0.9=100%
+    indian      n=10  @0.5=100%  @0.8=100%  @0.9=100%
+    japanese    n= 2  @0.5=100%  @0.8=100%  @0.9= 50%
+    korean      n= 1  @0.5=100%  @0.8=100%  @0.9=100%
+    latin       n=10  @0.5=100%  @0.8=100%  @0.9=100%
+    spanish     n= 8  @0.5=100%  @0.8=100%  @0.9=100%
+    ALL         n=77  @0.5=100%  @0.8=100%  @0.9= 97%
+  >>> multi-source FP/hr:
+    [voxpopuli_test]:
+  0.8       3 fires =     2.0/hr            0 fires =     0.0/hr
+  0.9       1 fires =     0.7/hr            0 fires =     0.0/hr
+    [peoples_test]:
+  0.8       5 fires =    10.0/hr            0 fires =     0.0/hr
+  0.9       3 fires =     6.0/hr            0 fires =     0.0/hr
+    [thirdparty_ami]:
+  0.8       5 fires =    10.0/hr            0 fires =     0.0/hr
+  0.9       1 fires =     2.0/hr            0 fires =     0.0/hr
+    [combined]:
+  0.8      13 fires =     5.2/hr            0 fires =     0.0/hr
+  0.9       5 fires =     2.0/hr            0 fires =     0.0/hr
+
+########## ozwelldone_elac (ozwell i'm done) ##########
+>>> 133390 pos (incl 6006 accent) / 160000 neg (Fri Jun 12 03:42:36 AM UTC 2026)
+  train exit=0 (Fri Jun 12 04:59:26 AM UTC 2026)
+  exported checkpoints/scratch-onnx/ozwelldone_elac.onnx
+  >>> held-out ElevenLabs accent recall:
+    american    n=10  @0.5= 90%  @0.8= 60%  @0.9= 30%
+    australian  n=10  @0.5=100%  @0.8= 80%  @0.9= 80%
+    british     n=10  @0.5= 90%  @0.8= 90%  @0.9= 90%
+    chinese     n= 6  @0.5= 67%  @0.8= 50%  @0.9= 50%
+    filipino    n=10  @0.5= 90%  @0.8= 70%  @0.9= 70%
+    indian      n=10  @0.5= 80%  @0.8= 80%  @0.9= 80%
+    japanese    n= 2  @0.5= 50%  @0.8=  0%  @0.9=  0%
+    korean      n= 1  @0.5=100%  @0.8=100%  @0.9=100%
+    latin       n=10  @0.5= 70%  @0.8= 50%  @0.9= 40%
+    spanish     n= 8  @0.5= 62%  @0.8= 62%  @0.9= 50%
+    ALL         n=77  @0.5= 82%  @0.8= 68%  @0.9= 61%
+  >>> multi-source FP/hr:
+    [voxpopuli_test]:
+  0.8       1 fires =     0.7/hr            0 fires =     0.0/hr
+  0.9       0 fires =     0.0/hr            0 fires =     0.0/hr
+    [peoples_test]:
+  0.8       0 fires =     0.0/hr            0 fires =     0.0/hr
+  0.9       0 fires =     0.0/hr            0 fires =     0.0/hr
+    [thirdparty_ami]:
+  0.8       1 fires =     2.0/hr            0 fires =     0.0/hr
+  0.9       0 fires =     0.0/hr            0 fires =     0.0/hr
+    [combined]:
+  0.8       2 fires =     0.8/hr            0 fires =     0.0/hr
+  0.9       0 fires =     0.0/hr            0 fires =     0.0/hr
+
+=== ELAC DONE Fri Jun 12 05:05:18 AM UTC 2026 — compare recall to cross-vendor baseline (ozwell-done was JP50/ZH67/ES75/ALL83) AND check multi-source FP didn't regress ===

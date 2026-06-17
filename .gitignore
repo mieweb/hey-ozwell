@@ -31,3 +31,9 @@ model/heybuddy/precalculated/
 model/heybuddy/pretrained/
 model/logs/*.log
 prod/js/models/*.amanda-bak
+real_audio/
+prod/js/asr/*.data
+prod/js/asr/*.wasm
+# Downloaded third-party ASR models (~494MB, re-downloadable — do not commit)
+model/asr_models/
+prod/js/server.log
