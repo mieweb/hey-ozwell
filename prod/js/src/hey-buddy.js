@@ -203,7 +203,7 @@ export class HeyBuddy {
      * @param {string} name - wake word stem (e.g. "hey-ozwell").
      * @param {Function} onCapture - called (embeddingFloat32, peakScore) once per spoken rep at speech end.
      */
-    startEnroll(name, onCapture) { this.enroll = { name, onCapture }; this._enrollPeak = { score: 0, emb: null }; }
+    startEnroll(name, onCapture, minScore) { this.enroll = { name, onCapture, minScore: minScore ?? null }; this._enrollPeak = { score: 0, emb: null }; }
     /** Stop enrollment capture. */
     stopEnroll() { this.enroll = null; this._enrollPeak = { score: 0, emb: null }; }
 
@@ -262,7 +262,7 @@ export class HeyBuddy {
         // ONLY if the base model actually recognized it as the phrase (peak >= the phrase's operating
         // threshold). This prevents enrolling a random/wrong phrase: stage-1 must accept it first.
         if (this.enroll && this._enrollPeak.emb) {
-            const need = this.wakeWords[this.enroll.name]?.threshold ?? 0.5;
+            const need = this.enroll.minScore ?? (this.wakeWords[this.enroll.name]?.threshold ?? 0.5);
             if (this._enrollPeak.score >= need) {
                 this.enroll.onCapture(this._enrollPeak.emb, this._enrollPeak.score);
             } else if (this.debug) {

@@ -182,24 +182,51 @@ document.addEventListener("DOMContentLoaded", async () => {
     const refreshStatus = () => {
         eStatus.textContent = PHRASES.map(n => `${pn(n)}: ${enrollment.count(n) >= REPS ? "✓ enrolled" : enrollment.count(n) + "/" + REPS}`).join("    ·    ");
     };
+    // Chime (Web Audio) to cue WHEN to speak — like Hey Siri's ping.
+    let _actx = null;
+    const chime = (freq = 880, dur = 0.12) => {
+        try {
+            _actx = _actx || new (window.AudioContext || window.webkitAudioContext)();
+            const o = _actx.createOscillator(), g = _actx.createGain();
+            o.frequency.value = freq; o.type = "sine"; o.connect(g); g.connect(_actx.destination);
+            const t = _actx.currentTime;
+            g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.2, t + 0.01);
+            g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+            o.start(t); o.stop(t + dur);
+        } catch (e) {}
+    };
+    const ENROLL_GATE = 0.85;          // base model must be quite sure it's the phrase (rejects FP garbage)
+    const CONSISTENCY = 0.5;           // later reps must resemble the first (cosine) — same phrase each time
     let enrolling = false;
     const enrollPhrase = (name) => {
         if (enrolling) return;
         enrolling = true;
         enrollment.clear(name);
-        eStatus.textContent = `Say “${pn(name)}” — 0/${REPS}`;
+        refreshStatus();               // FIX: reflect cleared state on the marker immediately (no stale "enrolled")
         let got = 0;
+        const prompt = () => { eStatus.textContent = `🔵 Say “${pn(name)}” now — ${got}/${REPS}`; chime(); };
+        prompt();
         heyBuddy.startEnroll(name, (emb) => {
+            // Consistency: each rep after the first must resemble the first (same phrase), else don't count.
+            if (got > 0) {
+                const sim = enrollment.score(name, emb);
+                if (sim !== null && sim < CONSISTENCY) {
+                    eStatus.textContent = `⚠️ that sounded different — say “${pn(name)}” again (${got}/${REPS})`;
+                    chime(440, 0.18);
+                    return;
+                }
+            }
             enrollment.addTemplate(name, emb);
             got++;
+            refreshStatus();           // update marker every step
             if (got >= REPS) {
                 heyBuddy.stopEnroll(); enrolling = false;
                 eStatus.textContent = `✓ enrolled “${pn(name)}” (${got} reps) — now verified by your voice`;
-                refreshStatus();
+                chime(1320, 0.18);     // success tone
             } else {
-                eStatus.textContent = `Say “${pn(name)}” again — ${got}/${REPS}`;
+                setTimeout(prompt, 350);
             }
-        });
+        }, ENROLL_GATE);
     };
     for (const name of PHRASES) {
         const b = document.createElement("button");
