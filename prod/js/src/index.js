@@ -89,6 +89,10 @@ const options = {
     // Voiceprint match threshold (tuned from the live readout): the enrolled phrase peaks
     // ~0.85, the other phrase ~0.57, silence -1 — so ~0.72 fires on YOUR phrase only.
     voiceprintThreshold: 0.72,
+    // DROP RECALL (2026-06-17 decision): the voiceprint is used for PRECISION only — reject false
+    // fires in runWakeGate — not to amplify weak wakes. Recall wasn't the problem (false positives
+    // were), and amplifying fights precision. Flip true to restore the recall fallback.
+    voiceprintRecall: false,
     vadModelPath: `${rootUrl}/pretrained/silero-vad.onnx`,
     spectrogramModelPath: `${rootUrl}/pretrained/mel-spectrogram.onnx`,
     embeddingModelPath: `${rootUrl}/pretrained/speech-embedding.onnx`,
@@ -145,8 +149,9 @@ document.addEventListener("DOMContentLoaded", async () => {
             const target = svCapture.targetName, r = svCapture.resolve;
             const firedName = pendingWake ? pendingWake.name : null;
             pendingWake = null; svCapture = null;
-            // matched phrase -> capture; a DIFFERENT wake -> reject immediately (no waiting).
-            r(firedName === target ? { audio: audioSamples } : { wrong: firedName });
+            // matched phrase -> capture BOTH the audio (speaker voiceprint) and the fire-time
+            // embedding (phrase voiceprint); a DIFFERENT wake -> reject immediately (no waiting).
+            r(firedName === target ? { audio: audioSamples, embedding: heyBuddy.lastWakeEmbedding } : { wrong: firedName });
             return;
         }
         // Otherwise: run the speaker-verification gate on the wake utterance.
@@ -199,6 +204,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     // doctor's voice acts on it.
     let pendingWake = null;
     let svCapture = null; // { targetName, resolve } while enrollment is waiting for an utterance
+    // WHAT-precision reject threshold: a fire whose phrase-voiceprint similarity is below this is a
+    // false fire (the doctor's own non-phrase speech). Tune live with window.__wakeRejectSim — the
+    // enrolled phrase peaks high (~0.85), the other phrase / junk lands lower. Start conservative.
+    const WAKE_REJECT_SIM = 0.55;
     heyBuddy.onDetected("hey-ozwell", () => {
         pendingWake = { name: "hey-ozwell", content: "Hey Ozwell — a clinician just started a session.",
                         label: "🔔 <b>“hey ozwell” detected</b>" };
@@ -254,20 +263,21 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
         const tag = v ? ` (${v.score.toFixed(2)})` : "";
 
-        // STAGE-2 (wake-phrase re-check): speaker-verify confirms WHO spoke, but the doctor's own
-        // conversation still false-fires (it's their voice → it passes). So re-check WHAT was said:
-        // transcribe the wake buffer with the already-loaded Whisper and require it to match the
-        // phrase. Reuses on-device Whisper (no extra model). Fails OPEN if Whisper isn't ready yet.
-        if (window.Whisper && window.Whisper.isLoaded()) {
-            let heard = "";
-            try { heard = (await window.Whisper.transcribe(audioSamples, 16000) || "").trim(); }
-            catch (e) { console.warn("[stage-2] whisper error (failing open):", e); }
-            if (heard && !wakePhraseMatches(heard, name)) {
-                integ.innerHTML = `${label} → 🛑 <b>not the wake phrase</b> (“${heard}”) — ignored`;
-                console.log(`🛑 stage-2 rejected ${name}: "${heard}"`);
+        // STAGE-2 (WHAT precision): speaker-verify confirms WHO spoke, but the doctor's OWN
+        // conversation still false-fires (it's their voice → it passes). So re-check WHAT was said
+        // ACOUSTICALLY: compare the fire-time embedding window to THIS phrase's enrolled voiceprint
+        // and reject if it doesn't match the phrase. Replaces the old Whisper transcript gate (which
+        // failed: "ozwell" is made-up so ASR hallucinated). On-device, no extra model. Per-user; tune
+        // WAKE_REJECT_SIM live (window.__wakeRejectSim). Only active once the phrase is enrolled.
+        if (heyBuddy.hasVoiceprint(name) && heyBuddy.lastWakeEmbedding) {
+            const sim = heyBuddy.voiceprintSimilarity(name, heyBuddy.lastWakeEmbedding);
+            const rej = (typeof window.__wakeRejectSim === "number") ? window.__wakeRejectSim : WAKE_REJECT_SIM;
+            if (sim < rej) {
+                integ.innerHTML = `${label} → 🛑 <b>not the phrase</b> (voiceprint ${sim.toFixed(2)}) — ignored`;
+                console.log(`🛑 stage-2 (voiceprint) rejected ${name}: sim ${sim.toFixed(2)} < ${rej}`);
                 return;
             }
-            if (heard) console.log(`✅ stage-2 confirmed ${name}: "${heard}"`);
+            console.log(`✅ stage-2 (voiceprint) confirmed ${name}: sim ${sim.toFixed(2)}`);
         }
 
         // During an active dictation session, only a verified "ozwell i'm done" ends it.
@@ -354,17 +364,24 @@ document.addEventListener("DOMContentLoaded", async () => {
             st().textContent = "loading verifier…"; await sv.ready();
             for (const ph of ENROLL_PHRASES) {
                 const clips = [];
+                const vecs = []; // fire-time embeddings -> phrase voiceprint (WHAT precision gate)
                 while (clips.length < SV_N_ENROLL) {
                     st().innerHTML = `🗣️ <b>say “${ph.label}”</b> &nbsp;<span style='color:#9fb6cc'>(sample ${clips.length + 1}/${SV_N_ENROLL})</span>`;
                     const res = await captureWakeUtterance(ph.name);
                     if (!res) { st().innerHTML = `⏳ didn’t catch “${ph.label}” — say it again, clearly`; await svSleep(700); continue; }
                     if (res.wrong) { st().innerHTML = `❌ that was the other phrase — please say “${ph.label}”`; await svSleep(900); continue; }
                     clips.push({ samples: res.audio, sampleRate: 16000 });
+                    if (res.embedding) vecs.push(res.embedding);
                     st().textContent = "✓ got it"; await svSleep(1200); // let the ~2s wake cooldown pass before the next
                 }
-                sv.enroll(ph.name, clips);
+                sv.enroll(ph.name, clips);              // WHO: speaker voiceprint (only the doctor acts)
+                if (vecs.length) {                       // WHAT: phrase voiceprint (reject the doctor's own false fires)
+                    heyBuddy.setVoiceprint(ph.name, vecs);
+                    voiceprints[ph.name] = vecs;
+                    saveVoiceprints(voiceprints);
+                }
             }
-            st().textContent = "✅ enrolled both phrases — only your voice wakes Ozwell now.";
+            st().textContent = "✅ enrolled both phrases — speaker + phrase voiceprints set (one enrollment, both gates).";
         } catch (e) {
             st().textContent = "error: " + e;
         } finally {

@@ -121,6 +121,12 @@ export class HeyBuddy {
         // fire one it hears nothing of — this stops enrolling a DIFFERENT phrase ("hey doug").
         this.voiceprintGate = options.voiceprintGate ?? 0.3;
         this.embeddingMean = null; // running "common-mode" embedding, subtracted before cosine
+        // RECALL use of the voiceprint (amplify a weak model fire). Default on for back-compat;
+        // set false to use the voiceprint for PRECISION only (reject false fires in runWakeGate).
+        this.voiceprintRecall = options.voiceprintRecall ?? true;
+        // The [16x96] embedding window at the moment a wake last fired — so the gate (runWakeGate)
+        // and enrollment can reuse the exact window the model scored, no recompute.
+        this.lastWakeEmbedding = null;
 
         // Initialize wake word models
         this.wakeWords = {};
@@ -307,6 +313,8 @@ export class HeyBuddy {
         }
         this.recording = true;
         this.wakeWordTimes[name] = now;
+        // Stash the fire-time embedding window for the precision gate + enrollment (same window the model scored).
+        this.lastWakeEmbedding = (this.embeddingBuffer && this.embeddingBuffer.data) ? Float32Array.from(this.embeddingBuffer.data) : null;
 
         for (let {names, callback} of this.detectedCallbacks) {
             if (Array.isArray(names) && names.includes(name) || names === name) {
@@ -377,8 +385,9 @@ export class HeyBuddy {
         }
         if (best !== null) {
             this.wakeWordDetected(best.name);
-        } else {
-            // General model fired nothing -> fall back to the strongest voiceprint match.
+        } else if (this.voiceprintRecall) {
+            // RECALL (optional): general model fired nothing -> fall back to the strongest voiceprint
+            // match. Off by default in this build — the voiceprint is used for PRECISION (reject) instead.
             let vbest = null;
             for (let name in returnMap) {
                 const sim = returnMap[name].voiceprintSim;
