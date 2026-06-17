@@ -134,8 +134,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (VERIFIER_MODE !== "off" && typeof AcousticVerifier !== "undefined") {
         const general = new AcousticVerifier(
             {
-                "ozwell-i'm-done": { modelPath: "../models/ozwell-i'm-done-verifier.onnx", threshold: 0.65 },
-                "hey-ozwell":      { modelPath: "../models/hey-ozwell-verifier.onnx",      threshold: 0.65 },
+                "ozwell-i'm-done": { modelPath: "../models/ozwell-i'm-done-verifier.onnx", threshold: 0.80 },
+                "hey-ozwell":      { modelPath: "../models/hey-ozwell-verifier.onnx",      threshold: 0.80 },
             },
             { debug: true }
         );
