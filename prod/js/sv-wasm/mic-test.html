@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Speaker verification — record-your-own-voice test</title>
+  <style>
+    body { font-family: monospace; background: #0b1622; color: #cde; padding: 1.5em; line-height: 1.5; max-width: 720px; }
+    h1 { font-size: 16px; color: #27aae1; }
+    button { font: 13px monospace; padding: 8px 14px; border-radius: 6px; cursor: pointer;
+             border: 1px solid #27aae1; background: #12233a; color: #cde; margin: 0 .4em .4em 0; }
+    button:disabled { opacity: .5; cursor: default; }
+    #status { margin: .8em 0; font-size: 15px; color: #ffd60a; min-height: 1.4em; }
+    #log { white-space: pre-wrap; background: #07101a; border: 1px solid #27aae1; border-radius: 6px;
+           padding: 1em; height: 11em; overflow-y: auto; font-size: 12px; }
+    .row { margin: .6em 0; }
+    label { color: #9fb6cc; }
+  </style>
+</head>
+<body>
+  <h1>Speaker verification — prove it with your own voice</h1>
+  <p>All on-device. Enroll your voice, then test: you should PASS, a different person should be BLOCKED. The score is computed live from the mic each time — nothing is pre-set.</p>
+
+  <div class="row">
+    <button id="enrollBtn" disabled>① Enroll my voice (say "hey ozwell")</button>
+    <button id="clearBtn">Clear enrollment</button>
+  </div>
+  <div class="row">
+    <button id="verifyBtn" disabled>② Test a voice (say "hey ozwell")</button>
+  </div>
+  <div class="row">
+    <label>match threshold: <input id="thr" type="range" min="0" max="1" step="0.01" value="0.5"
+      oninput="document.getElementById('thrVal').textContent=this.value" /></label>
+    <span id="thrVal">0.50</span>
+  </div>
+
+  <div id="status">Loading model…</div>
+  <div id="log"></div>
+
+  <script src="sherpa-onnx-speaker-diarization.js"></script>
+  <script src="mic-test.js"></script>
+  <script src="sherpa-onnx-wasm-main-speaker-diarization.js"></script>
+</body>
+</html>

@@ -31,9 +31,10 @@ model/heybuddy/precalculated/
 model/heybuddy/pretrained/
 model/logs/*.log
 prod/js/models/*.amanda-bak
-real_audio/
-prod/js/asr/*.data
-prod/js/asr/*.wasm
-# Downloaded third-party ASR models (~494MB, re-downloadable — do not commit)
-model/asr_models/
-prod/js/server.log
+
+# Speaker-verification WASM binaries (large build artifacts — regenerate via the
+# build runbook in prod/js/docs/speaker-verification-spike.md, or scp from the build box)
+prod/js/sv-wasm/*.wasm
+prod/js/sv-wasm/*.data
+prod/js/sv-runtime/*.wasm
+prod/js/sv-runtime/*.data

@@ -1,0 +1,148 @@
+/**
+ * On-device speaker-verification gate (the "only the enrolled doctor can wake it" layer).
+ *
+ * Loads the custom single-threaded sherpa-onnx WASM build (in /sv-wasm/) that exports the
+ * SpeakerEmbeddingExtractor C-API, runs TitaNet speaker embeddings fully in-browser, and
+ * verifies a live utterance against an enrolled "doctor" centroid stored in localStorage.
+ *
+ * Proven in the /sv-wasm/ spike: a ~1s "hey ozwell" gives genuine cosine ~0.66 / impostor
+ * ~0.30 (enroll-centroid: ~0.75 vs ~0.22, EER ~1.3%). This is a DIFFERENT axis from the
+ * content voiceprint in hey-buddy.js: that BOOSTS the doctor's accented phrase (recall);
+ * this BLOCKS a non-doctor's clean phrase (act/no-act). They compose.
+ *
+ * Load this as a classic <script> BEFORE index.js. Exposes window.SpeakerVerify.
+ * Audio in == Float32Array; pass its TRUE sample rate (sherpa resamples to 16k internally).
+ */
+(function () {
+  // Production runtime artifacts live in their OWN folder so they never clobber the
+  // frozen feasibility proof in /sv-wasm (test.html + mic-test.html, kept for the
+  // progression demo / YouTube short). This loads the single-threaded slim build.
+  const SV_DIR = "/sv-runtime";
+  const MODEL = "./nemo_en_titanet_small.onnx"; // preloaded into the WASM filesystem
+  const LS_KEY = "ozwellDoctorVoiceprint";       // { centroid: number[], n: number }
+  // Threshold from the spike's enroll-centroid distributions (genuine ~0.75 / impostor ~0.22).
+  // Lowered 0.5→0.4 (2026-06-17): background noise drags the genuine doctor down to ~0.3-0.4 while
+  // impostors stay ~0.03-0.22, so 0.4 keeps the doctor in noise and still rejects impostors with margin.
+  // Re-tune live: window.SpeakerVerify.threshold = 0.35 for heavy noise (don't go below ~0.3 — impostors).
+  const DEFAULT_THRESHOLD = 0.4;
+
+  let Module = null, handle = 0, dim = 0;
+  let readyResolve, readyReject;
+  const readyPromise = new Promise((res, rej) => { readyResolve = res; readyReject = rej; });
+
+  function loadScript(src) {
+    return new Promise((res, rej) => {
+      const s = document.createElement("script");
+      s.src = src; s.onload = res; s.onerror = () => rej(new Error("failed to load " + src));
+      document.head.appendChild(s);
+    });
+  }
+
+  // --- speaker-embedding extraction over the WASM C-API (names confirmed from the build) ---
+  function embed(samples, sampleRate) {
+    const M = Module;
+    const stream = M._SherpaOnnxSpeakerEmbeddingExtractorCreateStream(handle);
+    const ptr = M._malloc(samples.length * 4);
+    M.HEAPF32.set(samples, ptr / 4);
+    M._SherpaOnnxOnlineStreamAcceptWaveform(stream, sampleRate, ptr, samples.length); // stream-only
+    M._free(ptr);
+    M._SherpaOnnxOnlineStreamInputFinished(stream);
+    const ep = M._SherpaOnnxSpeakerEmbeddingExtractorComputeEmbedding(handle, stream);
+    const out = M.HEAPF32.subarray(ep / 4, ep / 4 + dim).slice();
+    // free the embedding (exported in the slim rebuild); guard in case it's absent.
+    if (M._SherpaOnnxSpeakerEmbeddingExtractorDestroyEmbedding) {
+      M._SherpaOnnxSpeakerEmbeddingExtractorDestroyEmbedding(ep);
+    }
+    M._SherpaOnnxDestroyOnlineStream(stream);
+    return l2normalize(out);
+  }
+
+  function l2normalize(v) {
+    let s = 0; for (let i = 0; i < v.length; i++) s += v[i] * v[i];
+    s = Math.sqrt(s); if (s > 0) for (let i = 0; i < v.length; i++) v[i] /= s;
+    return v;
+  }
+  function cosine(a, b) { let d = 0; const n = Math.min(a.length, b.length); for (let i = 0; i < n; i++) d += a[i] * b[i]; return d; } // both L2-normalized
+
+  // --- enrollment storage: PER-PHRASE centroids of the doctor's embeddings (vectors, not
+  // audio). Per-phrase because on a ~1s clip a speaker embedding still carries a little of
+  // WHAT was said, so the doctor's "hey ozwell" centroid scores their "ozwell i'm done"
+  // too low. We enroll + gate each phrase against its own centroid. ---
+  function loadAll() {
+    try {
+      const o = JSON.parse(localStorage.getItem(LS_KEY) || "{}") || {};
+      // Ignore the old single-centroid format ({centroid, n}) from earlier builds.
+      if (o && Array.isArray(o.centroid)) return {};
+      return o;
+    } catch (e) { return {}; }
+  }
+  function saveAll(obj) {
+    try { localStorage.setItem(LS_KEY, JSON.stringify(obj)); } catch (e) { console.warn("SV save failed", e); }
+  }
+  function loadCentroid(phrase) {
+    const o = loadAll()[phrase];
+    return o && o.centroid ? { centroid: Float32Array.from(o.centroid), n: o.n || 1 } : null;
+  }
+
+  const SpeakerVerify = {
+    ready: () => readyPromise,
+    isLoaded: () => handle !== 0,
+    threshold: DEFAULT_THRESHOLD,
+    embeddingDim: () => dim,
+
+    /** Enroll the doctor for a SPECIFIC phrase from N utterances → store that phrase's centroid. */
+    enroll(phrase, utterances /* [{samples, sampleRate}] */) {
+      if (!handle) throw new Error("SpeakerVerify not ready");
+      const embs = utterances.map(u => embed(u.samples, u.sampleRate));
+      const c = new Float32Array(dim);
+      for (const e of embs) for (let i = 0; i < dim; i++) c[i] += e[i];
+      for (let i = 0; i < dim; i++) c[i] /= embs.length;
+      l2normalize(c);
+      const all = loadAll(); all[phrase] = { centroid: Array.from(c), n: embs.length }; saveAll(all);
+      return { n: embs.length };
+    },
+
+    /** Verify a live utterance for `phrase` against that phrase's centroid. {score, pass, enrolled}. */
+    verify(phrase, samples, sampleRate) {
+      const enr = loadCentroid(phrase);
+      if (!enr) return { score: 0, pass: false, enrolled: false };
+      const live = embed(samples, sampleRate);
+      const score = cosine(live, enr.centroid);
+      return { score, pass: score >= SpeakerVerify.threshold, enrolled: true };
+    },
+
+    // hasEnrollment(phrase) -> is that phrase enrolled; hasEnrollment() -> is anything enrolled.
+    hasEnrollment: (phrase) => phrase ? !!loadAll()[phrase] : Object.keys(loadAll()).length > 0,
+    enrolledPhrases: () => Object.keys(loadAll()),
+    clearEnrollment: () => { try { localStorage.removeItem(LS_KEY); } catch (e) {} },
+  };
+
+  async function init() {
+    try {
+      // locateFile: the page is at "/" but the glue + .wasm/.data live in SV_DIR, so
+      // tell emscripten exactly where to fetch them (otherwise it 404s and init hangs).
+      window.Module = { locateFile: (path) => SV_DIR + "/" + path };
+      const onRuntime = new Promise((res) => { window.Module.onRuntimeInitialized = res; });
+      // order matters: config-marshaling helper, then the glue (which fires onRuntimeInitialized)
+      await loadScript(SV_DIR + "/sherpa-onnx-speaker-diarization.js");
+      await loadScript(SV_DIR + "/sherpa-onnx-wasm-main-speaker-diarization.js");
+      await onRuntime;
+      Module = window.Module;
+      const cfg = initSherpaOnnxSpeakerEmbeddingExtractorConfig(
+        { model: MODEL, numThreads: 1, debug: 0, provider: "cpu" }, Module);
+      handle = Module._SherpaOnnxCreateSpeakerEmbeddingExtractor(cfg.ptr);
+      Module._free(cfg.buffer); Module._free(cfg.ptr);
+      if (!handle) throw new Error("CreateSpeakerEmbeddingExtractor returned null");
+      dim = Module._SherpaOnnxSpeakerEmbeddingExtractorDim(handle);
+      console.log("[SpeakerVerify] ready — embedding dim", dim);
+      readyResolve(SpeakerVerify);
+    } catch (e) {
+      console.error("[SpeakerVerify] init failed:", e);
+      readyReject(e);
+    }
+  }
+
+  window.SpeakerVerify = SpeakerVerify;
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+  else init();
+})();
