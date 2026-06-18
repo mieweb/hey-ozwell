@@ -47,3 +47,12 @@ Two gates: WHO (speaker, thr 0.4) + WHAT (phrase voiceprint cosine, single fire-
   margin is already large (others ≤0.22 → rejected at either), and the enrolled user dips to ~0.3–0.4
   in noise/mask, so 0.5 risks false-rejecting the real doctor in those conditions. Keep 0.4 for recall;
   revisit toward 0.5 only if security is prioritized (a real mimic could score >0.22, unlike a TV).
+
+## 2026-06-18 — Enroll-in-noise (recall recovery)
+- Problem: enrolled CLEAR, tested in background noise → WHO (speaker) dropped into the 0.30s (below the
+  0.4 gate) → real wakes REJECTED (recall miss in noise).
+- Fix test: enrolled WITH the noise on, tested in noise → hey-ozwell 10/10, ozwell-i'm-done 9/10. Recall
+  recovered (WHO back above 0.4).
+- Takeaway: enrolling in the noise condition adapts the speaker template and recovers recall WITHOUT
+  lowering the 0.4 threshold — same adapt mechanism as the mask. Confirms "enroll in your conditions" as
+  the answer; threshold stays 0.4. (Caveat: 9/10 = 1 miss on n=10, within noise.)
