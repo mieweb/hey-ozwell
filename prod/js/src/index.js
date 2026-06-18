@@ -391,9 +391,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         svPanel.appendChild(row);
     }
 
-    // Samples per phrase. 3 = max robustness: more phrase-voiceprint templates → phraseCosine (max
-    // over templates) scores real wakes higher + tighter (fewer false rejects). 2 = quicker, 1 = snappy.
-    const SV_N_ENROLL = 3;
+    // Samples per phrase. More templates (phraseCosine = max over templates) = more robust, and lets
+    // you ENROLL ACROSS CONDITIONS — e.g. 6 = 3 masked + 3 clear so it matches whether you're masked or
+    // not (each condition gets ≥2 templates, matched by the closest). 3 = quick single-condition.
+    const SV_N_ENROLL = 6;
 
     // Enrollment captures the doctor's wake utterance through hey-buddy's OWN recording path
     // (onRecording) — the SAME path used at verification — so the embeddings actually match.
