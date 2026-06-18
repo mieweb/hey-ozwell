@@ -243,23 +243,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
         return best;
     }
-
-    // --- Per-utterance AGGREGATE verify ---------------------------------------------------------
-    // Rolling buffer of the most recent frame embeddings (each is a ~1s window). The single-frame
-    // check is fooled when a near-miss produces ONE lucky window that matches; aggregating over the
-    // utterance requires SUSTAINED matching, so a real phrase (high across many frames) passes while
-    // a near-miss (one fluke) fails. We take the median of the top matches — robust to a single fluke,
-    // but not dragged down by the silence/onset frames at the edges.
-    const recentEmb = [];
-    const RECENT_MAX = 14; // ~last 1.5–2s of overlapping windows
-    function phraseScoreAggregate(name) {
-        const scores = recentEmb.map((e) => phraseCosine(name, e)).filter((s) => s != null);
-        // fall back to the single fire-time frame if we somehow have too few frames buffered
-        if (scores.length < 3) return heyBuddy.lastWakeEmbedding ? phraseCosine(name, heyBuddy.lastWakeEmbedding) : null;
-        scores.sort((a, b) => b - a);
-        const k = Math.min(5, scores.length);   // consider the top-k best-aligned windows
-        return scores.slice(0, k)[Math.floor((k - 1) / 2)]; // median of the top-k (needs several high frames, not one)
-    }
     heyBuddy.onDetected("hey-ozwell", () => {
         pendingWake = { name: "hey-ozwell", content: "Hey Ozwell — a clinician just started a session.",
                         label: "🔔 <b>“hey ozwell” detected</b>" };
@@ -319,8 +302,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         // other; that's expected, NOT a contradiction. Each gate shows "— off" until enrolled.
         let sim = null;
         const rej = (typeof window.__wakeRejectSim === "number") ? window.__wakeRejectSim : WAKE_REJECT_SIM;
-        if (heyBuddy.hasVoiceprint(name)) {
-            sim = phraseScoreAggregate(name); // median of the top matching frames across the utterance
+        if (heyBuddy.hasVoiceprint(name) && heyBuddy.lastWakeEmbedding) {
+            // Single fire-frame cosine. (Tried per-utterance aggregate 2026-06-18: it BACKFIRED —
+            // "median of top-k windows" hunts each utterance's best-aligned window, which RAISED
+            // near-misses into the real-wake range and erased the clean separation single-frame had
+            // [real 0.85-0.92 vs near-miss 0.68-0.78]. Reverted to single frame.)
+            sim = phraseCosine(name, heyBuddy.lastWakeEmbedding);
         }
         const whoStr  = v        ? `WHO(voice) ${v.score.toFixed(2)} ${v.pass ? "✓" : "✗"}`        : `WHO(voice) —off`;
         const whatStr = sim != null ? `WHAT(phrase) ${sim.toFixed(2)} ${sim >= rej ? "✓" : "✗"}` : `WHAT(phrase) —off`;
@@ -636,8 +623,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                 if (typeof s === "number") { liveSim[name] = s; if (s > (livePeak[name] ?? -1)) livePeak[name] = s; }
             }
         }
-        // feed the rolling buffer for per-utterance aggregate verify
-        if (result.embedding) { recentEmb.push(Float32Array.from(result.embedding)); if (recentEmb.length > RECENT_MAX) recentEmb.shift(); }
     });
 
     const ePanel = document.createElement("div");
