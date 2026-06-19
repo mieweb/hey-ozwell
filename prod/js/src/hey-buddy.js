@@ -130,6 +130,8 @@ export class HeyBuddy {
         // N=1 = off (legacy single-frame). Live-tunable via window.__debounceFrames.
         this.debounceFrames = options.debounceFrames ?? 1;
         this._consec = {}; // per-phrase consecutive-detected-frame counter
+        this._peakProb = {}; // per-phrase peak probability within the current detection run
+        this._peakEmb = {};  // per-phrase embedding window at that peak frame (used for the voiceprint)
         // The [16x96] embedding window at the moment a wake last fired — so the gate (runWakeGate)
         // and enrollment can reuse the exact window the model scored, no recompute.
         this.lastWakeEmbedding = null;
@@ -319,8 +321,12 @@ export class HeyBuddy {
         }
         this.recording = true;
         this.wakeWordTimes[name] = now;
-        // Stash the fire-time embedding window for the precision gate + enrollment (same window the model scored).
-        this.lastWakeEmbedding = (this.embeddingBuffer && this.embeddingBuffer.data) ? Float32Array.from(this.embeddingBuffer.data) : null;
+        // NOTE: this.lastWakeEmbedding is set by the caller (checkWakeWords) to the PEAK-confidence frame of
+        // the run, BEFORE this fires — so the gate/enrollment use the best-aligned window, not the fire frame.
+        // Fallback for any other caller: use the current window if the peak wasn't set.
+        if (!this.lastWakeEmbedding && this.embeddingBuffer && this.embeddingBuffer.data) {
+            this.lastWakeEmbedding = Float32Array.from(this.embeddingBuffer.data);
+        }
 
         for (let {names, callback} of this.detectedCallbacks) {
             if (Array.isArray(names) && names.includes(name) || names === name) {
@@ -379,15 +385,33 @@ export class HeyBuddy {
                 ? this.voiceprintSimilarity(name, liveVec) : 0;
         }
 
-        // Debounce: update per-phrase consecutive-detected-frame counts, then require >= minRun before firing.
-        const minRun = (typeof window.__debounceFrames === "number") ? window.__debounceFrames : this.debounceFrames;
+        // Debounce + PEAK-CAPTURE (per phrase). Track consecutive detected frames (debounce), AND the
+        // PEAK-confidence embedding within the current run — so the voiceprint is captured at the
+        // best-aligned frame, not wherever debounce happens to commit. Critical for SHORT phrases like
+        // "hey ozwell": the debounce-fire frame can land on the tail (low/variable cosine), but the peak
+        // frame is the real phrase moment (consistent cosine).
         for (let name in returnMap) {
-            this._consec[name] = returnMap[name].detected ? (this._consec[name] || 0) + 1 : 0;
+            if (returnMap[name].detected) {
+                this._consec[name] = (this._consec[name] || 0) + 1;
+                if (returnMap[name].probability > (this._peakProb[name] || 0) && this.embeddingBuffer && this.embeddingBuffer.data) {
+                    this._peakProb[name] = returnMap[name].probability;
+                    this._peakEmb[name] = Float32Array.from(this.embeddingBuffer.data);
+                }
+            } else {
+                this._consec[name] = 0; this._peakProb[name] = 0; this._peakEmb[name] = null;
+            }
         }
-        // Model winner-take-all (highest raw probability among phrases that have cleared the debounce).
+        // Per-phrase debounce: window.__debounceFrames (number) overrides all; else this.debounceFrames may
+        // be a number (global) or a {phrase: N} object (per-phrase). Short phrases need a lower N.
+        const minRunFor = (name) => {
+            if (typeof window.__debounceFrames === "number") return window.__debounceFrames;
+            if (this.debounceFrames && typeof this.debounceFrames === "object") return this.debounceFrames[name] ?? 1;
+            return this.debounceFrames || 1;
+        };
+        // Model winner-take-all (highest raw probability among phrases that have cleared their debounce).
         let best = null;
         for (let name in returnMap) {
-            if (returnMap[name].detected && this._consec[name] >= minRun) {
+            if (returnMap[name].detected && this._consec[name] >= minRunFor(name)) {
                 const prob = returnMap[name].probability;
                 if (best === null || prob > best.prob) {
                     best = { name, prob };
@@ -395,6 +419,8 @@ export class HeyBuddy {
             }
         }
         if (best !== null) {
+            // capture the voiceprint at the PEAK frame of this run, not the current (debounce-fire) frame
+            this.lastWakeEmbedding = this._peakEmb[best.name] || ((this.embeddingBuffer && this.embeddingBuffer.data) ? Float32Array.from(this.embeddingBuffer.data) : null);
             this.wakeWordDetected(best.name);
         } else if (this.voiceprintRecall) {
             // RECALL (optional): general model fired nothing -> fall back to the strongest voiceprint
@@ -408,7 +434,10 @@ export class HeyBuddy {
                 const modelLit = returnMap[name].probability >= this.voiceprintGate;
                 if (sim >= vt && modelLit && (vbest === null || sim > vbest.sim)) vbest = { name, sim };
             }
-            if (vbest !== null) this.wakeWordDetected(vbest.name);
+            if (vbest !== null) {
+                this.lastWakeEmbedding = this._peakEmb[vbest.name] || ((this.embeddingBuffer && this.embeddingBuffer.data) ? Float32Array.from(this.embeddingBuffer.data) : null);
+                this.wakeWordDetected(vbest.name);
+            }
         }
         return returnMap;
     }

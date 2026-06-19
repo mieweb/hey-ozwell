@@ -93,11 +93,12 @@ const options = {
     // fires in runWakeGate — not to amplify weak wakes. Recall wasn't the problem (false positives
     // were), and amplifying fights precision. Flip true to restore the recall fallback.
     voiceprintRecall: false,
-    // DEBOUNCE (2026-06-19): require the phrase to clear threshold for 3 CONSECUTIVE frames before firing.
-    // Browser-faithful eval: cuts false fires ~30x (35.9 -> ~0.4/hr @0.5) at ~1pt recall cost (99% held).
-    // The old "debounce tanks recall" was a whole-clip-eval artifact; in the real streaming pipeline a real
-    // wake sustains 4-9 frames while false fires are 1-2 frame spikes. Live-tunable: window.__debounceFrames.
-    debounceFrames: 3,
+    // DEBOUNCE (2026-06-19): require the phrase to clear threshold for N CONSECUTIVE frames before firing.
+    // Browser-faithful eval: cuts false fires ~30x at ~1pt recall cost. PER-PHRASE: the long "ozwell i'm done"
+    // sustains many frames so it can afford N=3; the SHORT "hey ozwell" fires in a brief 1-2 frame burst, so
+    // N=3 ate real wakes (the "skinny bar, no score" non-detections) — it runs at N=1. window.__debounceFrames
+    // (a number) overrides all for quick testing.
+    debounceFrames: { "hey-ozwell": 1, "ozwell-i'm-done": 3 },
     vadModelPath: `${rootUrl}/pretrained/silero-vad.onnx`,
     spectrogramModelPath: `${rootUrl}/pretrained/mel-spectrogram.onnx`,
     embeddingModelPath: `${rootUrl}/pretrained/speech-embedding.onnx`,
@@ -185,7 +186,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const gateBox = document.createElement("div");
     gateBox.style = "margin:1em 0;padding:0.6em 0.75em;border:1px solid #2b3a4a;border-radius:6px;" +
                     "font-family:monospace;font-size:12px;color:#9fb6cc;background:#0b1622";
-    gateBox.innerHTML = "<b style='color:#cde'>Gate scores</b> — WHO(voice)=speaker (thr 0.4) · WHAT(phrase)=voiceprint cosine (thr 0.82) · newest first";
+    gateBox.innerHTML = "<b style='color:#cde'>Gate scores</b> — WHO(voice)=speaker (thr 0.4) · WHAT(phrase)=voiceprint cosine (per-phrase thr) · newest first";
     const gateRows = document.createElement("div");
     gateRows.style = "margin-top:6px";
     gateBox.appendChild(gateRows);
@@ -230,9 +231,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     // doctor's voice acts on it.
     let pendingWake = null;
     let svCapture = null; // { targetName, resolve } while enrollment is waiting for an utterance
-    // WHAT-precision reject threshold on RAW cosine (the metric validated on the demo branch): real
-    // wakes ~0.92, near-misses ≤0.82 → 0.88 sits in the gap. Tune live with window.__wakeRejectSim.
-    const WAKE_REJECT_SIM = 0.82;
+    // WHAT-precision reject threshold on RAW cosine — PER-PHRASE, because the two phrases have very
+    // different cosine distributions: the long "ozwell i'm done" real wakes sit ~0.85-0.94, but the
+    // SHORT "hey ozwell" real wakes sit ~0.64-0.93 (measured live), so a single 0.82 rejected most real
+    // "hey ozwell". Set hey-ozwell lower until peak-capture tightens it; re-measure & narrow the gap.
+    // window.__wakeRejectSim (a number) overrides all for quick testing.
+    const WAKE_REJECT_SIM = { "hey-ozwell": 0.62, "ozwell-i'm-done": 0.82 };
     // Raw cosine (no background-mean subtraction — matches the demo's validated metric, NOT the
     // product's voiceprintSimilarity) of a wake embedding to the phrase's enrolled voiceprints (max).
     function phraseCosine(name, vec) {
@@ -306,7 +310,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         // did they actually say the phrase. Different references — a wake can pass one and fail the
         // other; that's expected, NOT a contradiction. Each gate shows "— off" until enrolled.
         let sim = null;
-        const rej = (typeof window.__wakeRejectSim === "number") ? window.__wakeRejectSim : WAKE_REJECT_SIM;
+        const rej = (typeof window.__wakeRejectSim === "number") ? window.__wakeRejectSim
+            : (WAKE_REJECT_SIM[name] ?? 0.82);
         if (heyBuddy.hasVoiceprint(name) && heyBuddy.lastWakeEmbedding) {
             // Single fire-frame cosine. (Tried per-utterance aggregate 2026-06-18: it BACKFIRED —
             // "median of top-k windows" hunts each utterance's best-aligned window, which RAISED
