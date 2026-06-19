@@ -93,6 +93,11 @@ const options = {
     // fires in runWakeGate — not to amplify weak wakes. Recall wasn't the problem (false positives
     // were), and amplifying fights precision. Flip true to restore the recall fallback.
     voiceprintRecall: false,
+    // DEBOUNCE (2026-06-19): require the phrase to clear threshold for 3 CONSECUTIVE frames before firing.
+    // Browser-faithful eval: cuts false fires ~30x (35.9 -> ~0.4/hr @0.5) at ~1pt recall cost (99% held).
+    // The old "debounce tanks recall" was a whole-clip-eval artifact; in the real streaming pipeline a real
+    // wake sustains 4-9 frames while false fires are 1-2 frame spikes. Live-tunable: window.__debounceFrames.
+    debounceFrames: 3,
     vadModelPath: `${rootUrl}/pretrained/silero-vad.onnx`,
     spectrogramModelPath: `${rootUrl}/pretrained/mel-spectrogram.onnx`,
     embeddingModelPath: `${rootUrl}/pretrained/speech-embedding.onnx`,

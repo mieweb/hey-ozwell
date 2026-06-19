@@ -124,6 +124,12 @@ export class HeyBuddy {
         // RECALL use of the voiceprint (amplify a weak model fire). Default on for back-compat;
         // set false to use the voiceprint for PRECISION only (reject false fires in runWakeGate).
         this.voiceprintRecall = options.voiceprintRecall ?? true;
+        // Debounce: require a phrase to clear its threshold for N CONSECUTIVE frames before firing.
+        // Real wakes sustain (~4-9 frames in the browser pipeline); conversational false fires are brief
+        // 1-2 frame spikes — so this cuts false fires ~30x at ~1pt recall cost (measured browser-faithful).
+        // N=1 = off (legacy single-frame). Live-tunable via window.__debounceFrames.
+        this.debounceFrames = options.debounceFrames ?? 1;
+        this._consec = {}; // per-phrase consecutive-detected-frame counter
         // The [16x96] embedding window at the moment a wake last fired — so the gate (runWakeGate)
         // and enrollment can reuse the exact window the model scored, no recompute.
         this.lastWakeEmbedding = null;
@@ -373,10 +379,15 @@ export class HeyBuddy {
                 ? this.voiceprintSimilarity(name, liveVec) : 0;
         }
 
-        // Model winner-take-all (highest raw probability among model-detected phrases).
+        // Debounce: update per-phrase consecutive-detected-frame counts, then require >= minRun before firing.
+        const minRun = (typeof window.__debounceFrames === "number") ? window.__debounceFrames : this.debounceFrames;
+        for (let name in returnMap) {
+            this._consec[name] = returnMap[name].detected ? (this._consec[name] || 0) + 1 : 0;
+        }
+        // Model winner-take-all (highest raw probability among phrases that have cleared the debounce).
         let best = null;
         for (let name in returnMap) {
-            if (returnMap[name].detected) {
+            if (returnMap[name].detected && this._consec[name] >= minRun) {
                 const prob = returnMap[name].probability;
                 if (best === null || prob > best.prob) {
                     best = { name, prob };
