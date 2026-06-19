@@ -80,10 +80,13 @@ const graphLineWidth = 1;
 const options = {
     debug: true,
     modelPath: wakeWords.map((word) => `../models/${word.replace(/ /g, '-')}.onnx`),
-    // Per-word operating thresholds from offline eval (each meets <1 FP/hr at its point):
-    //   hey-ozwell @0.8 (0 FP/hr), ozwell-i'm-done @0.5 (0.6 FP/hr).
+    // Per-word BASE (front-end) thresholds. The old values (hey 0.8 / done 0.5) were tuned for "<1 FP/hr"
+    // with NO downstream gate. We now have WHO+WHAT precision gates, so the base model should run LOOSE for
+    // recall (two-pass design: high-recall front-end, strict back-end) and let the gates reject false fires.
+    // hey-ozwell lowered 0.8 -> 0.6 because at 0.8 it failed to register at all in noise / when not crisply
+    // enunciated ("doesn't even register a guess"). window.__heyThr / live tuning can push it further to 0.5.
     wakeWordThresholds: {
-        "hey-ozwell": 0.8,
+        "hey-ozwell": 0.6,
         "ozwell-i'm-done": 0.5,
     },
     // Voiceprint match threshold (tuned from the live readout): the enrolled phrase peaks
