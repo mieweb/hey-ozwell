@@ -85,9 +85,12 @@ const options = {
     // recall (two-pass design: high-recall front-end, strict back-end) and let the gates reject false fires.
     // hey-ozwell lowered 0.8 -> 0.6 because at 0.8 it failed to register at all in noise / when not crisply
     // enunciated ("doesn't even register a guess"). window.__heyThr / live tuning can push it further to 0.5.
+    // Two-pass: loose, high-recall front-end; precision from the back-end gates + debounce. ozwell-done can
+    // go lowest (debounce 2 + a STRONG WHAT gate both backstop it). hey-ozwell has only the WHO speaker gate
+    // backstopping (debounce 1, weak WHAT on the short phrase), so it's lowered less aggressively.
     wakeWordThresholds: {
-        "hey-ozwell": 0.6,
-        "ozwell-i'm-done": 0.5,
+        "hey-ozwell": 0.5,
+        "ozwell-i'm-done": 0.4,
     },
     // Voiceprint match threshold (tuned from the live readout): the enrolled phrase peaks
     // ~0.85, the other phrase ~0.57, silence -1 — so ~0.72 fires on YOUR phrase only.
@@ -98,10 +101,10 @@ const options = {
     voiceprintRecall: false,
     // DEBOUNCE (2026-06-19): require the phrase to clear threshold for N CONSECUTIVE frames before firing.
     // Browser-faithful eval: cuts false fires ~30x at ~1pt recall cost. PER-PHRASE: the long "ozwell i'm done"
-    // sustains many frames so it can afford N=3; the SHORT "hey ozwell" fires in a brief 1-2 frame burst, so
-    // N=3 ate real wakes (the "skinny bar, no score" non-detections) — it runs at N=1. window.__debounceFrames
-    // (a number) overrides all for quick testing.
-    debounceFrames: { "hey-ozwell": 1, "ozwell-i'm-done": 3 },
+    // sustains many frames so it runs N=2 (kills 1-frame spikes, lenient enough for casual delivery); the SHORT
+    // "hey ozwell" fires in a brief 1-2 frame burst, so N>1 ate real wakes (the "skinny bar, no score"
+    // non-detections) — it runs at N=1. window.__debounceFrames (a number) overrides all for quick testing.
+    debounceFrames: { "hey-ozwell": 1, "ozwell-i'm-done": 2 },
     vadModelPath: `${rootUrl}/pretrained/silero-vad.onnx`,
     spectrogramModelPath: `${rootUrl}/pretrained/mel-spectrogram.onnx`,
     embeddingModelPath: `${rootUrl}/pretrained/speech-embedding.onnx`,
