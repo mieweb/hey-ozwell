@@ -5,3 +5,6 @@
 *.pt filter=lfs diff=lfs merge=lfs -text
 *.png filter=lfs diff=lfs merge=lfs -text
 *.zip filter=lfs diff=lfs merge=lfs -text
+
+# Standup short visuals: keep as normal blobs (small, must render on a plain pull, not LFS)
+prod/js/docs/short-mon-*.png !filter !diff !merge -text
