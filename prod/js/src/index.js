@@ -397,10 +397,16 @@ document.addEventListener("DOMContentLoaded", async () => {
                 : "enrolled: " + (condStr || (whatList.length ? whatList.join(", ") : "—")) +
                   (mismatch ? " &nbsp;⚠️ phrase gate not set — click Enroll again" : "")) +
             "</span><div id='sv-status' style='margin:.3em 0;min-height:1.3em;color:#ffd60a'></div>";
+        const enrolled = whoList.length || whatList.length;
         const row = document.createElement("div");
+        // FRESH enroll (replaces) — for first-time setup or starting over.
         const enrollBtn = document.createElement("button");
-        enrollBtn.textContent = (whoList.length || whatList.length) ? "Add another condition" : "Enroll doctor voice"; enrollBtn.style = SV_BTN;
-        enrollBtn.onclick = () => enrollDoctor(enrollBtn);
+        enrollBtn.textContent = enrolled ? "Re-enroll (fresh)" : "Enroll doctor voice"; enrollBtn.style = SV_BTN;
+        enrollBtn.onclick = () => enrollDoctor(enrollBtn, false);
+        // ADD a condition (appends) — shown once enrolled, for new room / distance / background.
+        const addBtn = document.createElement("button");
+        addBtn.textContent = "Add condition"; addBtn.style = SV_BTN + ";margin-left:.5em";
+        addBtn.onclick = () => enrollDoctor(addBtn, true);
         const clearBtn = document.createElement("button");
         clearBtn.textContent = "Clear"; clearBtn.style = SV_BTN + ";margin-left:.5em;border-color:#27aae1";
         clearBtn.onclick = () => {
@@ -409,7 +415,9 @@ document.addEventListener("DOMContentLoaded", async () => {
             voiceprints = {}; saveVoiceprints(voiceprints);                            // clear WHAT storage
             renderSvPanel();
         };
-        row.appendChild(enrollBtn); row.appendChild(clearBtn);
+        row.appendChild(enrollBtn);
+        if (enrolled) row.appendChild(addBtn);   // only meaningful once there's a base to add to
+        row.appendChild(clearBtn);
         svPanel.appendChild(row);
     }
 
@@ -431,7 +439,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    async function enrollDoctor(btn) {
+    async function enrollDoctor(btn, append = false) {
         const sv = window.SpeakerVerify;
         btn.disabled = true; window.__ozEnrollActive = true; // suppress wake drives while enrolling
         const st = () => document.getElementById("sv-status");
@@ -461,17 +469,20 @@ document.addEventListener("DOMContentLoaded", async () => {
                 // APPEND, don't overwrite — so enrolling again (a new room, a few steps back, some
                 // background) ADDS that condition instead of replacing. Both gates take the BEST match,
                 // so more conditions = more coverage. Capped to the most recent VP_CAP templates.
-                if (svOk) sv.enroll(ph.name, clips, { append: true }); // WHO: add this condition's centroid
-                if (vecs.length) {                                     // WHAT: append this condition's templates
-                    const merged = (voiceprints[ph.name] || []).concat(vecs).slice(-VP_CAP);
+                if (svOk) sv.enroll(ph.name, clips, { append }); // WHO: append=add condition, else replace
+                if (vecs.length) {                               // WHAT: append or replace this phrase's templates
+                    const base = append ? (voiceprints[ph.name] || []) : [];
+                    const merged = base.concat(vecs).slice(-VP_CAP);
                     heyBuddy.setVoiceprint(ph.name, merged);
                     voiceprints[ph.name] = merged;
                     saveVoiceprints(voiceprints);
                 }
             }
-            st().textContent = svOk
-                ? "✅ both gates set. Tip: if it ever misses in a new spot, click again there to add that condition."
-                : "✅ phrase voiceprint set (precision gate). Speaker model not loaded — WHO gate off. Click again anywhere to add a condition.";
+            st().textContent = append
+                ? "✅ condition added — it now also matches this spot. Add more any time it's lacking."
+                : (svOk
+                    ? "✅ enrolled — both gates set. Tip: if it misses in a new spot, hit “Add condition” there."
+                    : "✅ phrase voiceprint set (WHAT gate). Speaker model not loaded — WHO gate off. Use “Add condition” to extend.");
         } catch (e) {
             st().textContent = "error: " + e;
         } finally {
