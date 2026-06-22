@@ -385,17 +385,21 @@ document.addEventListener("DOMContentLoaded", async () => {
         const whatList = phraseNames.filter((n) => heyBuddy.hasVoiceprint && heyBuddy.hasVoiceprint(n)); // WHAT = phrase voiceprint
         const bothMissing = !whoList.length && !whatList.length;
         const mismatch = whoList.length && !whatList.length; // speaker enrolled but phrase gate not (e.g. old enrollment)
+        const condStr = phraseNames.map((n) => {
+            const wn = (sv && sv.conditionCount) ? sv.conditionCount(n) : 0;
+            return wn ? `${n} (${wn} condition${wn > 1 ? "s" : ""})` : null;
+        }).filter(Boolean).join(", ");
         svPanel.innerHTML =
-            "<b>🩺 Doctor enrollment</b> — one enroll sets BOTH gates: WHO (your voice) + WHAT (the phrase).<br>" +
+            "<b>🩺 Doctor enrollment</b> — enroll once to start; click again any time it feels lacking " +
+            "(new room, farther back, some background) to <b>add</b> that condition.<br>" +
             "<span style='color:#9fb6cc'>" +
             (bothMissing ? "not enrolled — gates off (anyone can wake)"
-                : "WHO(voice): " + (whoList.length ? whoList.join(", ") : "—none") +
-                  " &nbsp;·&nbsp; WHAT(phrase): " + (whatList.length ? whatList.join(", ") : "—none") +
+                : "enrolled: " + (condStr || (whatList.length ? whatList.join(", ") : "—")) +
                   (mismatch ? " &nbsp;⚠️ phrase gate not set — click Enroll again" : "")) +
             "</span><div id='sv-status' style='margin:.3em 0;min-height:1.3em;color:#ffd60a'></div>";
         const row = document.createElement("div");
         const enrollBtn = document.createElement("button");
-        enrollBtn.textContent = "Enroll doctor voice"; enrollBtn.style = SV_BTN;
+        enrollBtn.textContent = (whoList.length || whatList.length) ? "Add another condition" : "Enroll doctor voice"; enrollBtn.style = SV_BTN;
         enrollBtn.onclick = () => enrollDoctor(enrollBtn);
         const clearBtn = document.createElement("button");
         clearBtn.textContent = "Clear"; clearBtn.style = SV_BTN + ";margin-left:.5em;border-color:#27aae1";
@@ -409,10 +413,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         svPanel.appendChild(row);
     }
 
-    // Samples per phrase. More templates (phraseCosine = max over templates) = more robust, and lets
-    // you ENROLL ACROSS CONDITIONS — e.g. 6 = 3 masked + 3 clear so it matches whether you're masked or
-    // not (each condition gets ≥2 templates, matched by the closest). 3 = quick single-condition.
+    // Reps captured per enroll session (per phrase). Enrollment is OPTIONAL/REPEATABLE: do it once to start,
+    // then click again any time it feels lacking (a new room, farther back, background) — each session APPENDS
+    // a condition instead of overwriting. VP_CAP bounds the WHAT templates kept (max-over-templates gets more
+    // permissive as templates pile up, so we keep only the most recent VP_CAP).
     const SV_N_ENROLL = 3;
+    const VP_CAP = 18; // ~6 conditions x 3 reps
 
     // Enrollment captures the doctor's wake utterance through hey-buddy's OWN recording path
     // (onRecording) — the SAME path used at verification — so the embeddings actually match.
@@ -452,16 +458,20 @@ document.addEventListener("DOMContentLoaded", async () => {
                     beep(990); // "got it" confirmation chime
                     st().textContent = "✓ got it"; await svSleep(1200); // let the ~2s wake cooldown pass before the next
                 }
-                if (svOk) sv.enroll(ph.name, clips);     // WHO: speaker voiceprint (only the doctor acts) — if model loaded
-                if (vecs.length) {                       // WHAT: phrase voiceprint (reject the doctor's own false fires) — always
-                    heyBuddy.setVoiceprint(ph.name, vecs);
-                    voiceprints[ph.name] = vecs;
+                // APPEND, don't overwrite — so enrolling again (a new room, a few steps back, some
+                // background) ADDS that condition instead of replacing. Both gates take the BEST match,
+                // so more conditions = more coverage. Capped to the most recent VP_CAP templates.
+                if (svOk) sv.enroll(ph.name, clips, { append: true }); // WHO: add this condition's centroid
+                if (vecs.length) {                                     // WHAT: append this condition's templates
+                    const merged = (voiceprints[ph.name] || []).concat(vecs).slice(-VP_CAP);
+                    heyBuddy.setVoiceprint(ph.name, merged);
+                    voiceprints[ph.name] = merged;
                     saveVoiceprints(voiceprints);
                 }
             }
             st().textContent = svOk
-                ? "✅ enrolled both phrases — speaker + phrase voiceprints set (one enrollment, both gates)."
-                : "✅ enrolled both phrases — phrase voiceprint set (precision gate). Speaker model not loaded — WHO gate off.";
+                ? "✅ both gates set. Tip: if it ever misses in a new spot, click again there to add that condition."
+                : "✅ phrase voiceprint set (precision gate). Speaker model not loaded — WHO gate off. Click again anywhere to add a condition.";
         } catch (e) {
             st().textContent = "error: " + e;
         } finally {

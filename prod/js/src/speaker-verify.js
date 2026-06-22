@@ -80,9 +80,16 @@
   function saveAll(obj) {
     try { localStorage.setItem(LS_KEY, JSON.stringify(obj)); } catch (e) { console.warn("SV save failed", e); }
   }
-  function loadCentroid(phrase) {
+  // Multi-condition: store a LIST of centroids per phrase (one per enroll session/condition) and verify
+  // against the BEST match — so adding a rep "from across the room" or "with background" extends coverage
+  // instead of blurring one averaged centroid. Backward-compatible with the old single-centroid format.
+  const SV_CENTROID_CAP = 6; // keep the most recent N conditions
+  function loadCentroids(phrase) {
     const o = loadAll()[phrase];
-    return o && o.centroid ? { centroid: Float32Array.from(o.centroid), n: o.n || 1 } : null;
+    if (!o) return [];
+    if (Array.isArray(o.centroids)) return o.centroids.map((c) => Float32Array.from(c)); // new multi format
+    if (Array.isArray(o.centroid)) return [Float32Array.from(o.centroid)];               // old single format
+    return [];
   }
 
   const SpeakerVerify = {
@@ -91,26 +98,33 @@
     threshold: DEFAULT_THRESHOLD,
     embeddingDim: () => dim,
 
-    /** Enroll the doctor for a SPECIFIC phrase from N utterances → store that phrase's centroid. */
-    enroll(phrase, utterances /* [{samples, sampleRate}] */) {
+    /** Enroll the doctor for a phrase from N utterances → one condition-centroid. opts.append ADDS it as
+     *  another condition (multi-condition); otherwise it replaces. Capped to the most recent SV_CENTROID_CAP. */
+    enroll(phrase, utterances /* [{samples, sampleRate}] */, opts) {
       if (!handle) throw new Error("SpeakerVerify not ready");
       const embs = utterances.map(u => embed(u.samples, u.sampleRate));
       const c = new Float32Array(dim);
       for (const e of embs) for (let i = 0; i < dim; i++) c[i] += e[i];
       for (let i = 0; i < dim; i++) c[i] /= embs.length;
       l2normalize(c);
-      const all = loadAll(); all[phrase] = { centroid: Array.from(c), n: embs.length }; saveAll(all);
-      return { n: embs.length };
+      const prev = (opts && opts.append) ? loadCentroids(phrase) : [];
+      const centroids = prev.concat([c]).slice(-SV_CENTROID_CAP).map((v) => Array.from(v));
+      const all = loadAll(); all[phrase] = { centroids }; saveAll(all);
+      return { n: embs.length, conditions: centroids.length };
     },
 
-    /** Verify a live utterance for `phrase` against that phrase's centroid. {score, pass, enrolled}. */
+    /** Verify a live utterance against the BEST of the phrase's condition-centroids. {score, pass, enrolled}. */
     verify(phrase, samples, sampleRate) {
-      const enr = loadCentroid(phrase);
-      if (!enr) return { score: 0, pass: false, enrolled: false };
+      const cents = loadCentroids(phrase);
+      if (!cents.length) return { score: 0, pass: false, enrolled: false };
       const live = embed(samples, sampleRate);
-      const score = cosine(live, enr.centroid);
+      let score = -1;
+      for (const c of cents) { const s = cosine(live, c); if (s > score) score = s; }
       return { score, pass: score >= SpeakerVerify.threshold, enrolled: true };
     },
+
+    /** How many conditions are enrolled for a phrase (0 = none). */
+    conditionCount: (phrase) => loadCentroids(phrase).length,
 
     // hasEnrollment(phrase) -> is that phrase enrolled; hasEnrollment() -> is anything enrolled.
     hasEnrollment: (phrase) => phrase ? !!loadAll()[phrase] : Object.keys(loadAll()).length > 0,
