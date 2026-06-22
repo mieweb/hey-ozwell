@@ -237,12 +237,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     // doctor's voice acts on it.
     let pendingWake = null;
     let svCapture = null; // { targetName, resolve } while enrollment is waiting for an utterance
-    // WHAT-precision reject threshold on RAW cosine — PER-PHRASE, because the two phrases have very
-    // different cosine distributions: the long "ozwell i'm done" real wakes sit ~0.85-0.94, but the
-    // SHORT "hey ozwell" real wakes sit ~0.64-0.93 (measured live), so a single 0.82 rejected most real
-    // "hey ozwell". Set hey-ozwell lower until peak-capture tightens it; re-measure & narrow the gap.
+    // WHAT-precision reject threshold on RAW cosine, PER-PHRASE. With the capture-freeze fix + raw mic +
+    // matched-environment enrollment, real wakes sit ~0.87-0.96 for BOTH phrases (measured live). hey-ozwell
+    // was temporarily 0.62 to work around the capture-drift bug; now raised to 0.80 (below the ~0.87 real
+    // floor, well above junk). Final values should sit in the gap above measured near-miss/junk scores.
     // window.__wakeRejectSim (a number) overrides all for quick testing.
-    const WAKE_REJECT_SIM = { "hey-ozwell": 0.62, "ozwell-i'm-done": 0.82 };
+    const WAKE_REJECT_SIM = { "hey-ozwell": 0.80, "ozwell-i'm-done": 0.82 };
     // Raw cosine (no background-mean subtraction — matches the demo's validated metric, NOT the
     // product's voiceprintSimilarity) of a wake embedding to the phrase's enrolled voiceprints (max).
     function phraseCosine(name, vec) {
