@@ -87,8 +87,11 @@ const options = {
     // 0.7 (well under the 1.00 peak, but filters 0.5-0.7 moderate junk before it reaches the gates — and
     // since debounce is OFF for the short phrase, the base is its ONLY confidence filter), done to its proven
     // 0.5. If casual/quiet delivery starts missing, ease hey back toward 0.6.
+    // Tune live with window.__baseThr (number = all, or {name: thr}). 0.7 was too high for casual hey-ozwell
+    // delivery (bars peak ~0.5-0.65 then -> never crossed -> "barely fires"); back to 0.5 where it fires
+    // reliably. The looseness is safe here: the WHO+WHAT gates do precision, so the base can favor recall.
     wakeWordThresholds: {
-        "hey-ozwell": 0.7,
+        "hey-ozwell": 0.5,
         "ozwell-i'm-done": 0.5,
     },
     // Voiceprint match threshold (tuned from the live readout): the enrolled phrase peaks

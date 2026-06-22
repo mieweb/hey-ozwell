@@ -75,9 +75,16 @@ export class WakeWord extends ONNXModel {
     async checkWakeWordCalled(embeddings) {
         const probability = await this.run(embeddings);
 
+        // Live base-threshold override for tuning without a rebuild: window.__baseThr can be a number
+        // (all phrases) or a {name: thr} map. Falls back to the configured per-word threshold.
+        let thr = this.threshold;
+        const ov = (typeof window !== "undefined") ? window.__baseThr : undefined;
+        if (typeof ov === "number") thr = ov;
+        else if (ov && this.name && typeof ov[this.name] === "number") thr = ov[this.name];
+
         return {
             probability,
-            detected: probability >= this.threshold
+            detected: probability >= thr
         };
     }
 

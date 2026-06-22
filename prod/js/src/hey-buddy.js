@@ -144,6 +144,7 @@ export class HeyBuddy {
             let modelName = model.split("/").pop().split(".")[0];
             let modelThreshold = this.wakeWordThresholds[modelName] ?? this.wakeWordThreshold;
             this.wakeWords[modelName] = new WakeWord(model, modelThreshold);
+            this.wakeWords[modelName].name = modelName; // for per-phrase window.__baseThr override
             this.wakeWords[modelName].test(this.debug);
         }
 
