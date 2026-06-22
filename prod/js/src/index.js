@@ -80,17 +80,16 @@ const graphLineWidth = 1;
 const options = {
     debug: true,
     modelPath: wakeWords.map((word) => `../models/${word.replace(/ /g, '-')}.onnx`),
-    // Per-word BASE (front-end) thresholds. The old values (hey 0.8 / done 0.5) were tuned for "<1 FP/hr"
-    // with NO downstream gate. We now have WHO+WHAT precision gates, so the base model should run LOOSE for
-    // recall (two-pass design: high-recall front-end, strict back-end) and let the gates reject false fires.
-    // hey-ozwell lowered 0.8 -> 0.6 because at 0.8 it failed to register at all in noise / when not crisply
-    // enunciated ("doesn't even register a guess"). window.__heyThr / live tuning can push it further to 0.5.
-    // Two-pass: loose, high-recall front-end; precision from the back-end gates + debounce. ozwell-done can
-    // go lowest (debounce 2 + a STRONG WHAT gate both backstop it). hey-ozwell has only the WHO speaker gate
-    // backstopping (debounce 1, weak WHAT on the short phrase), so it's lowered less aggressively.
+    // Per-word BASE (front-end) thresholds = the CONFIDENCE filter (debounce is a separate DURATION filter
+    // and can't replace it — a sustained near-miss passes debounce). We briefly dropped these very low
+    // (0.5/0.4) to fix "doesn't register", but most of that was bugs since fixed (mic DSP, capture drift,
+    // 0.8+debounce eating the short spike). Real wakes now peak ~1.00, so we raised them back: hey-ozwell to
+    // 0.7 (well under the 1.00 peak, but filters 0.5-0.7 moderate junk before it reaches the gates — and
+    // since debounce is OFF for the short phrase, the base is its ONLY confidence filter), done to its proven
+    // 0.5. If casual/quiet delivery starts missing, ease hey back toward 0.6.
     wakeWordThresholds: {
-        "hey-ozwell": 0.5,
-        "ozwell-i'm-done": 0.4,
+        "hey-ozwell": 0.7,
+        "ozwell-i'm-done": 0.5,
     },
     // Voiceprint match threshold (tuned from the live readout): the enrolled phrase peaks
     // ~0.85, the other phrase ~0.57, silence -1 — so ~0.72 fires on YOUR phrase only.
