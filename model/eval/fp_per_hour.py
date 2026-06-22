@@ -57,17 +57,23 @@ def main():
     ap.add_argument("--pretrained-dir", default="pretrained")
     ap.add_argument("--label", default="model")
     ap.add_argument("--thresholds", default="0.5,0.7,0.9")
+    ap.add_argument("--browser", action="store_true",
+                    help="Score via the BROWSER-FAITHFUL pipeline (per-1.08s-buffer peak-norm + rolling "
+                         "4-buffer assembly, like prod/js) instead of whole-clip norm. Matches what the "
+                         "browser actually does -> truthful (higher) live FP estimate.")
     args = ap.parse_args()
     THRS = [float(x) for x in args.thresholds.split(",")]
 
     ev = WakeWordEvaluator(args.model, args.pretrained_dir)
+    if args.browser:
+        from browser_embed import stream_scores
     files = sorted(glob.glob(os.path.join(args.audio_dir, "*.wav")))
     total_sec = 0.0
     seqs = []
     for p in files:
         info = sf.info(p)
         total_sec += info.frames / info.samplerate
-        s = window_seq(ev, load_16k_mono(p))
+        s = stream_scores(load_16k_mono(p), ev.wake) if args.browser else window_seq(ev, load_16k_mono(p))
         if s.size:
             seqs.append(s)
     hours = total_sec / 3600.0

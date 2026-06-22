@@ -37,6 +37,15 @@ def stream_embeddingbuffers(audio):
         if len(recent)==maxE:
             yield np.concatenate(recent,axis=0)     # [16,96]
 
+def stream_scores(audio, wake_sess):
+    """Browser-faithful per-hop wake scores: run the wake model on each [16,96] embeddingBuffer the
+    browser would assemble. Returns the score sequence (per 0.12s hop) for recall(max)/FP(event-count).
+    Per-buffer peak-norm is scale-invariant, so audio may be raw or whole-clip-normed — same result."""
+    return np.array([
+        float(wake_sess.run(None, {"input": eb[None].astype("float32")})[0].reshape(-1)[0])
+        for eb in stream_embeddingbuffers(audio)
+    ], dtype="float32")
+
 if __name__=="__main__":
     import sys; sys.path.insert(0,".")
     from evaluate_wakeword import load_16k_mono
