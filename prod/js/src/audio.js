@@ -93,12 +93,17 @@ export class AudioBatcher {
         if (this.initialized) {
             return;
         }
+        // Disable the browser's ADAPTIVE audio DSP. echoCancellation/autoGainControl/noiseSuppression
+        // change their behavior with the background (e.g. a fan), which reshapes the voice differently
+        // between environments -> the enrolled voiceprint stops matching (WHO/WHAT cosine collapses even
+        // in two "quiet" rooms). Raw audio is consistent across environments AND closer to what the model
+        // was trained on; loudness is handled by the per-buffer peak-norm downstream, so AGC is redundant.
         this.stream = await navigator.mediaDevices.getUserMedia({
             audio: {
                 channelCount: 1,
-                echoCancellation: true,
-                autoGainControl: true,
-                noiseSuppression: true,
+                echoCancellation: false,
+                autoGainControl: false,
+                noiseSuppression: false,
             }
         });
         this.audioContext = new AudioContext();
