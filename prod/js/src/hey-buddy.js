@@ -321,12 +321,14 @@ export class HeyBuddy {
         }
         this.recording = true;
         this.wakeWordTimes[name] = now;
-        // NOTE: this.lastWakeEmbedding is set by the caller (checkWakeWords) to the PEAK-confidence frame of
-        // the run, BEFORE this fires — so the gate/enrollment use the best-aligned window, not the fire frame.
-        // Fallback for any other caller: use the current window if the peak wasn't set.
-        if (!this.lastWakeEmbedding && this.embeddingBuffer && this.embeddingBuffer.data) {
-            this.lastWakeEmbedding = Float32Array.from(this.embeddingBuffer.data);
-        }
+        // FREEZE the wake embedding at THIS fire moment = the peak of the current detection run up to the
+        // fire. Captured ONCE per fire (this runs after the interval guard above), so it can't drift to
+        // later low-confidence frames during the recording tail — that drift collapsed the gate/enrollment
+        // cosine (esp. with a low base threshold, where weak frames keep counting as "detected").
+        // Enrollment and the runtime gate both read this same frozen value -> their cosines stay comparable.
+        this.lastWakeEmbedding = (this._peakEmb && this._peakEmb[name])
+            ? this._peakEmb[name]
+            : ((this.embeddingBuffer && this.embeddingBuffer.data) ? Float32Array.from(this.embeddingBuffer.data) : null);
 
         for (let {names, callback} of this.detectedCallbacks) {
             if (Array.isArray(names) && names.includes(name) || names === name) {
@@ -419,8 +421,8 @@ export class HeyBuddy {
             }
         }
         if (best !== null) {
-            // capture the voiceprint at the PEAK frame of this run, not the current (debounce-fire) frame
-            this.lastWakeEmbedding = this._peakEmb[best.name] || ((this.embeddingBuffer && this.embeddingBuffer.data) ? Float32Array.from(this.embeddingBuffer.data) : null);
+            // NOTE: lastWakeEmbedding is captured (frozen) INSIDE wakeWordDetected, once per fire, from the
+            // run's peak — NOT here every frame (that drifted to later low-confidence frames -> bad cosine).
             this.wakeWordDetected(best.name);
         } else if (this.voiceprintRecall) {
             // RECALL (optional): general model fired nothing -> fall back to the strongest voiceprint
@@ -435,7 +437,6 @@ export class HeyBuddy {
                 if (sim >= vt && modelLit && (vbest === null || sim > vbest.sim)) vbest = { name, sim };
             }
             if (vbest !== null) {
-                this.lastWakeEmbedding = this._peakEmb[vbest.name] || ((this.embeddingBuffer && this.embeddingBuffer.data) ? Float32Array.from(this.embeddingBuffer.data) : null);
                 this.wakeWordDetected(vbest.name);
             }
         }
