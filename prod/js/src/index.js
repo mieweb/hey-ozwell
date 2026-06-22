@@ -244,7 +244,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     // was temporarily 0.62 to work around the capture-drift bug; now raised to 0.80 (below the ~0.87 real
     // floor, well above junk). Final values should sit in the gap above measured near-miss/junk scores.
     // window.__wakeRejectSim (a number) overrides all for quick testing.
-    const WAKE_REJECT_SIM = { "hey-ozwell": 0.80, "ozwell-i'm-done": 0.82 };
+    const WAKE_REJECT_SIM = { "hey-ozwell": 0.80, "ozwell-i'm-done": 0.80 };
     // Raw cosine (no background-mean subtraction — matches the demo's validated metric, NOT the
     // product's voiceprintSimilarity) of a wake embedding to the phrase's enrolled voiceprints (max).
     function phraseCosine(name, vec) {
