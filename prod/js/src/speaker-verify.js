@@ -28,6 +28,7 @@
   const DEFAULT_THRESHOLD = 0.45;
 
   let Module = null, handle = 0, dim = 0;
+  let cohort = [];   // AS-norm crowd: other-voice embeddings; live/centroid scored against it cancels channel
   let readyResolve, readyReject;
   const readyPromise = new Promise((res, rej) => { readyResolve = res; readyReject = rej; });
 
@@ -96,6 +97,12 @@
     ready: () => readyPromise,
     isLoaded: () => handle !== 0,
     threshold: DEFAULT_THRESHOLD,
+    // AS-norm (score normalization): normalize the raw cosine against a crowd of other voices, so the
+    // threshold stays stable when a room/mic drags scores down. SHADOW by default — we compute & expose the
+    // z-score but still gate on raw cosine until znormThreshold is set from a real second-speaker test.
+    useAsnorm: false,
+    znormThreshold: 1.5,   // "at least N std above the crowd"; tune from genuine vs real-impostor z-scores
+    cohortSize: () => cohort.length,
     embeddingDim: () => dim,
 
     /** Enroll the doctor for a phrase from N utterances → one condition-centroid. opts.append ADDS it as
@@ -120,7 +127,19 @@
       const live = embed(samples, sampleRate);
       let score = -1;
       for (const c of cents) { const s = cosine(live, c); if (s > score) score = s; }
-      return { score, pass: score >= SpeakerVerify.threshold, enrolled: true };
+      // AS-norm: z = how many std the raw score sits above the crowd's scores against this same live clip.
+      // A weird room drags the crowd scores down too, so the offset cancels and z stays stable.
+      let znorm = null;
+      if (cohort.length) {
+        let sum = 0, sum2 = 0;
+        for (const cv of cohort) { const s = cosine(live, cv); sum += s; sum2 += s * s; }
+        const m = cohort.length, mean = sum / m, std = Math.sqrt(Math.max(sum2 / m - mean * mean, 1e-9));
+        znorm = (score - mean) / std;
+      }
+      const pass = (SpeakerVerify.useAsnorm && znorm !== null)
+        ? (znorm >= SpeakerVerify.znormThreshold)
+        : (score >= SpeakerVerify.threshold);
+      return { score, znorm, pass, enrolled: true };
     },
 
     /** How many conditions are enrolled for a phrase (0 = none). */
@@ -150,6 +169,11 @@
       if (!handle) throw new Error("CreateSpeakerEmbeddingExtractor returned null");
       dim = Module._SherpaOnnxSpeakerEmbeddingExtractorDim(handle);
       console.log("[SpeakerVerify] ready — embedding dim", dim);
+      // Load the AS-norm cohort (other-voice embeddings, same model). Optional — gate works without it.
+      try {
+        const r = await fetch(SV_DIR + "/sv-cohort.json");
+        if (r.ok) { cohort = (await r.json()).map((v) => Float32Array.from(v)); console.log("[SpeakerVerify] AS-norm cohort:", cohort.length); }
+      } catch (e) { console.warn("[SpeakerVerify] cohort load failed (AS-norm off):", e); }
       readyResolve(SpeakerVerify);
     } catch (e) {
       console.error("[SpeakerVerify] init failed:", e);

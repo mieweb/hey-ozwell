@@ -327,7 +327,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             // [real 0.85-0.92 vs near-miss 0.68-0.78]. Reverted to single frame.)
             sim = phraseCosine(name, heyBuddy.lastWakeEmbedding);
         }
-        const whoStr  = v        ? `WHO(voice) ${v.score.toFixed(2)} ${v.pass ? "✓" : "✗"}`        : `WHO(voice) —off`;
+        const whoStr  = v        ? `WHO(voice) ${v.score.toFixed(2)}${v.znorm != null ? " z" + v.znorm.toFixed(1) : ""} ${v.pass ? "✓" : "✗"}`        : `WHO(voice) —off`;
         const whatStr = sim != null ? `WHAT(phrase) ${sim.toFixed(2)} ${sim >= rej ? "✓" : "✗"}` : `WHAT(phrase) —off`;
         const gates = `<div style="font-size:12px;color:#9fb6cc;margin-top:4px">${whoStr} &nbsp;·&nbsp; ${whatStr}</div>`;
         console.log(`[gates] ${name} → WHO ${v ? v.score.toFixed(2) + (v.pass ? " pass" : " FAIL") : "off"} | WHAT ${sim != null ? sim.toFixed(2) + (sim >= rej ? " pass" : " FAIL") : "off"}`);
