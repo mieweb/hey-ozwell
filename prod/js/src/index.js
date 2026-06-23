@@ -200,11 +200,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     gateBox.appendChild(gateRows);
     document.body.insertBefore(gateBox, integ.nextSibling);
     function logGate(name, v, sim, rej, outcome, color) {
-        const who = v ? `WHO ${v.score.toFixed(2)} ${v.pass ? "✓" : "✗"}` : "WHO —off";
+        const who = v ? `WHO ${v.score.toFixed(2)}${v.znorm != null ? " z" + v.znorm.toFixed(1) : ""} ${v.pass ? "✓" : "✗"}` : "WHO —off";
         const what = (sim != null) ? `WHAT ${sim.toFixed(2)} ${sim >= rej ? "✓" : "✗"}` : "WHAT —off";
         const row = document.createElement("div");
         row.style = `color:${color || "#cde"};padding:1px 0`;
-        row.textContent = `${name.padEnd(15)} ${who.padEnd(13)} · ${what.padEnd(14)} → ${outcome}`;
+        row.textContent = `${name.padEnd(15)} ${who.padEnd(21)} · ${what.padEnd(14)} → ${outcome}`;
         gateRows.prepend(row);
         while (gateRows.children.length > 10) gateRows.removeChild(gateRows.lastChild);
     }
