@@ -305,8 +305,19 @@ class WakeWordTrainer(Trainer):
         weight: Optional[torch.Tensor]=None,
     ) -> torch.Tensor:
         """
-        Compute the binary cross entropy loss between the predicted and target values.
+        Compute the loss between the predicted and target values. Default binary cross entropy; set
+        HEYBUDDY_FOCAL_GAMMA>0 to use FOCAL loss instead (down-weights easy examples -> sharper boundary,
+        lower false-fires at equal recall; validated in the browser-faithful loss A/B 2026-06-23).
         """
+        import os
+        gamma = float(os.environ.get("HEYBUDDY_FOCAL_GAMMA", "0"))
+        if gamma > 0:
+            xc = x.clamp(1e-6, 1 - 1e-6)
+            pt = torch.where(y > 0.5, xc, 1 - xc)
+            focal = (1 - pt) ** gamma * -torch.log(pt)
+            if weight is not None:
+                focal = focal * weight.to(self.device)
+            return focal.mean()
         if weight is None:
             return nn.functional.binary_cross_entropy(x, y)
         return nn.functional.binary_cross_entropy(x, y, weight.to(self.device))

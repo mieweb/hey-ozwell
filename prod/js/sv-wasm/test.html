@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Speaker-verification WASM feasibility test</title>
+  <style>
+    body { font-family: monospace; background: #0b1622; color: #cde; padding: 1.5em; line-height: 1.5; }
+    h1 { font-size: 16px; color: #27aae1; }
+    #out { white-space: pre-wrap; background: #07101a; border: 1px solid #27aae1; border-radius: 6px; padding: 1em; min-height: 8em; }
+  </style>
+</head>
+<body>
+  <h1>sherpa-onnx speaker-embedding — in-browser feasibility test</h1>
+  <p>Loads the custom WASM build + TitaNet, embeds 3 synthetic clips, checks the genuine/impostor cosine margin. Watch this box (and the devtools console):</p>
+  <div id="out"></div>
+
+  <!-- 1) shipped wrapper: defines initSherpaOnnxSpeakerEmbeddingExtractorConfig() globally -->
+  <script src="sherpa-onnx-speaker-diarization.js"></script>
+  <!-- 2) our wrapper + test driver: defines Module + onRuntimeInitialized -->
+  <script src="sv-embed.js"></script>
+  <!-- 3) emscripten glue (must be last): fetches .wasm/.data, then fires onRuntimeInitialized -->
+  <script src="sherpa-onnx-wasm-main-speaker-diarization.js"></script>
+</body>
+</html>

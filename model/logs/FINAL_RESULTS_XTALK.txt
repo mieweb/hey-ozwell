@@ -1,0 +1,39 @@
+=== cross-talk fix Tue Jun  9 04:21:20 PM UTC 2026 (counterpart negs=40000) ===
+negs_xtalk_done (200000, 17, 96) | negs_xtalk_hey (200000, 17, 96)
+
+>>> BASELINE cross-trigger (current models):
+  ozwell-done fires on 'hey ozwell' clips @0.5: 11% (n=66) [want LOW]
+  hey-ozwell fires on 'ozwell done' clips @0.8: 56% (n=66) [want LOW]
+
+>>> TRAIN ozwell_done_xtalk: 127384 pos / negs_xtalk_done.npy (Tue Jun  9 04:21:36 PM UTC 2026)
+  train exit=0 (Tue Jun  9 05:38:37 PM UTC 2026)
+  exported checkpoints/scratch-onnx/ozwell_done_xtalk.onnx
+
+>>> TRAIN heyozwell_xtalk: 125902 pos / negs_xtalk_hey.npy (Tue Jun  9 05:38:39 PM UTC 2026)
+  train exit=0 (Tue Jun  9 06:56:55 PM UTC 2026)
+  exported checkpoints/scratch-onnx/heyozwell_xtalk.onnx
+
+>>> AFTER FIX:
+ozwell-done (xtalk) @0.5 — own recall:
+   American: 63% (n=100)
+   en-AU: 92% (n=12)
+   en-GB: 94% (n=16)
+   en-IN: 83% (n=12)
+   en-US: 87% (n=23)
+   CROSS-TRIGGER on 'hey ozwell' @0.5: 5% (n=66) [want LOW]
+hey-ozwell (xtalk) @0.8 — own recall:
+   en-AU: 100% (n=12)
+   en-GB: 100% (n=16)
+   en-IN: 100% (n=12)
+   en-US: 96% (n=23)
+   CROSS-TRIGGER on 'ozwell done' @0.8: 0% (n=66) [want LOW]
+
+>>> FP/hour ozwell_done_xtalk (op thr 0.5):
+=== ozwell_done_xtalk: FP/hour over 1.59h of held-out real speech (410 clips) ===
+  0.5       5 fires =     3.2/hr            0 fires =     0.0/hr
+
+>>> FP/hour heyozwell_xtalk (op thr 0.8):
+=== heyozwell_xtalk: FP/hour over 1.59h of held-out real speech (410 clips) ===
+  0.8       4 fires =     2.5/hr            0 fires =     0.0/hr
+
+=== XTALK DONE Tue Jun  9 07:00:59 PM UTC 2026 ===

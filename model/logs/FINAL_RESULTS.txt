@@ -1,0 +1,25 @@
+=== pipeline started Wed Jun  3 08:10:39 PM UTC 2026 ===
+[1/5] waiting for LibriSpeech extract (tmux exl)...
+  extract finished: EXIT_CODE=0
+[2/5] combining speech (libri) + sound (freesound) negatives...
+combined (52500, 17, 96) from 1 libri + 1 free
+[3/5] training (Wed Jun  3 08:11:55 PM UTC 2026) -> logs/pipeline_train.log
+  train exit=0 (Wed Jun  3 08:32:37 PM UTC 2026)
+[4/5] exporting ONNX...
+exported
+[5/5] eval @ production scale (Wed Jun  3 08:32:39 PM UTC 2026):
+--- RETRAINED (speech+sound negs) / ElevenLabs held-out test ---
+POSITIVE  n= 100  mean=0.427  median=0.308  p10=0.005  p90=0.981
+NEGATIVE  n= 139  mean=0.324  median=0.043  p10=0.000  p90=0.991
+  thr=0.30   recall= 50.0%   per-clip FPR= 35.3%
+  thr=0.50   recall= 44.0%   per-clip FPR= 31.7%
+  thr=0.70   recall= 35.0%   per-clip FPR= 27.3%
+  thr=0.90   recall= 25.0%   per-clip FPR= 22.3%
+--- in-domain Piper ---
+POSITIVE  n=  15  mean=0.519  median=0.495  p10=0.016  p90=0.972
+NEGATIVE  n= 139  mean=0.324  median=0.043  p10=0.000  p90=0.991
+  thr=0.30   recall= 60.0%   per-clip FPR= 35.3%
+  thr=0.50   recall= 46.7%   per-clip FPR= 31.7%
+  thr=0.70   recall= 46.7%   per-clip FPR= 27.3%
+  thr=0.90   recall= 40.0%   per-clip FPR= 22.3%
+=== pipeline DONE Wed Jun  3 08:32:57 PM UTC 2026 — read this file for results ===

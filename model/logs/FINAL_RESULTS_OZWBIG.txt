@@ -1,0 +1,27 @@
+=== ozwell-done balanced accent retrain Fri Jun 12 04:16:07 PM UTC 2026 ===
+>>> 143628 pos (base 127384 + 16244 balanced accent) / 160000 neg  [pos<neg? balanced]
+  train exit=0 (Fri Jun 12 05:33:25 PM UTC 2026)
+  exported checkpoints/scratch-onnx/ozwelldone_elacbig.onnx
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+  File "/home/jlocala/hey-ozwell/model/eval/evaluate_wakeword.py", line 83, in __init__
+    self.wake = _deterministic_session(model_path)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jlocala/hey-ozwell/model/eval/evaluate_wakeword.py", line 76, in _deterministic_session
+    return ort.InferenceSession(path, sess_options=so)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    self._create_inference_session(providers, provider_options, disabled_optimizers)
+    sess = C.InferenceSession(session_options, self._model_path, True, self._read_config_from_model)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+>>> multi-source FP/hr (new model) @0.5:
+  [voxpopuli_test]:
+  0.5       6 fires =     4.0/hr            0 fires =     0.0/hr
+  [peoples_test]:
+  0.5       7 fires =    14.0/hr            1 fires =     2.0/hr
+  [thirdparty_ami]:
+  0.5       5 fires =    10.0/hr            0 fires =     0.0/hr
+  [combined]:
+  0.5      18 fires =     7.2/hr            1 fires =     0.4/hr
+
+=== OZWBIG DONE Fri Jun 12 05:39:11 PM UTC 2026 — adopt only if cross-vendor UP, originals HELD, FP HELD ===

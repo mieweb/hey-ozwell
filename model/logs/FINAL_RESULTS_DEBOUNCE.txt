@@ -1,0 +1,31 @@
+=== RECALL UNDER DEBOUNCE on big held-out test (does requiring N consecutive frames keep recall?) Fri Jun 12 03:16:59 PM UTC 2026 ===
+(debounced FP was already 0.0/hr everywhere; this is the recall COST side)
+Traceback (most recent call last):
+  File "/home/jlocala/hey-ozwell/model/eval/debounce_recall.py", line 14, in <module>
+    ev = WakeWordEvaluator(MODEL, "pretrained")
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jlocala/hey-ozwell/model/eval/evaluate_wakeword.py", line 83, in __init__
+    self.wake = _deterministic_session(model_path)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jlocala/hey-ozwell/model/eval/evaluate_wakeword.py", line 76, in _deterministic_session
+    return ort.InferenceSession(path, sess_options=so)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    self._create_inference_session(providers, provider_options, disabled_optimizers)
+    sess = C.InferenceSession(session_options, self._model_path, True, self._read_config_from_model)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Traceback (most recent call last):
+  File "/home/jlocala/hey-ozwell/model/eval/debounce_recall.py", line 14, in <module>
+    ev = WakeWordEvaluator(MODEL, "pretrained")
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jlocala/hey-ozwell/model/eval/evaluate_wakeword.py", line 83, in __init__
+    self.wake = _deterministic_session(model_path)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jlocala/hey-ozwell/model/eval/evaluate_wakeword.py", line 76, in _deterministic_session
+    return ort.InferenceSession(path, sess_options=so)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    self._create_inference_session(providers, provider_options, disabled_optimizers)
+    sess = C.InferenceSession(session_options, self._model_path, True, self._read_config_from_model)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+=== DEBOUNCE DONE Fri Jun 12 03:16:59 PM UTC 2026 — if mr2/mr3 recall holds, debounce is the ship-ready false-fire fix ===

@@ -1,0 +1,25 @@
+=== peoples started Fri Jun  5 03:26:28 PM UTC 2026 ===
+A/B vs run_100k: LibriSpeech read -> People's Speech spontaneous (real, different source); test=held-out ElevenLabs
+[1/4] extract People's Speech negatives (Fri Jun  5 03:26:28 PM UTC 2026) -> logs/peoples_extract.log ...
+  extract exit=0 (Fri Jun  5 03:38:50 PM UTC 2026)
+[2/4] combine peoples + freesound -> negs_peoples_all.npy
+combined (52500, 17, 96) from 4 peoples-files + 1 free-files | mean(frames) 2.14
+[3/4] training (Fri Jun  5 03:38:51 PM UTC 2026) -> logs/peoples_train.log (reuses cached 100k positives)
+  train exit=0 (Fri Jun  5 05:35:38 PM UTC 2026)
+[4/4] export + eval (Fri Jun  5 05:35:38 PM UTC 2026):
+exported
+--- peoples / ElevenLabs HELD-OUT test (honest — different source from training) ---
+POSITIVE  n= 100  mean=0.612  median=0.851  p10=0.010  p90=1.000
+NEGATIVE  n= 139  mean=0.435  median=0.223  p10=0.000  p90=0.999
+  thr=0.30   recall= 67.0%   per-clip FPR= 47.5%
+  thr=0.50   recall= 60.0%   per-clip FPR= 41.0%
+  thr=0.70   recall= 56.0%   per-clip FPR= 38.1%
+  thr=0.90   recall= 48.0%   per-clip FPR= 34.5%
+--- in-domain Piper ---
+POSITIVE  n=  15  mean=0.922  median=0.997  p10=0.754  p90=1.000
+NEGATIVE  n= 139  mean=0.435  median=0.223  p10=0.000  p90=0.999
+  thr=0.30   recall=100.0%   per-clip FPR= 47.5%
+  thr=0.50   recall= 93.3%   per-clip FPR= 41.0%
+  thr=0.70   recall= 86.7%   per-clip FPR= 38.1%
+  thr=0.90   recall= 86.7%   per-clip FPR= 34.5%
+=== peoples DONE Fri Jun  5 05:35:59 PM UTC 2026 ===

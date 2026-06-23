@@ -1,0 +1,45 @@
+=== ozwell-done REBALANCE sweep (clean surgical positives, vary negatives) Mon Jun 15 01:40:01 PM UTC 2026 ===
+positives (fixed) = 129174 (127384 base + 1790 clean surgical accent)
+negs_rebal_conf 168000 | negs_rebal_voxconf 223000
+
+########## rebal_conf: 129174 pos / 168000 neg (Mon Jun 15 01:40:12 PM UTC 2026) ##########
+  train exit=0 (Mon Jun 15 02:59:16 PM UTC 2026)
+  exported
+    american     88%
+    australian   92%
+    british      92%
+    chinese      75%
+    filipino     85%
+    indian       91%
+    japanese     33%
+    korean      100%
+    latin        82%
+    spanish      77%
+    ALL          87%  (prod 86, surgical 92)
+    multi-source FP/hr @0.5 (prod 3.6, surgical 6.4):
+      voxpopuli_test     0.5       1 fires =     0.7/hr            0 fires =     0.0/hr
+      peoples_test       0.5       4 fires =     8.0/hr            1 fires =     2.0/hr
+      thirdparty_ami     0.5      11 fires =    22.0/hr            0 fires =     0.0/hr
+      combined           0.5      16 fires =     6.4/hr            1 fires =     0.4/hr
+
+########## rebal_voxconf: 129174 pos / 223000 neg (Mon Jun 15 03:05:21 PM UTC 2026) ##########
+  train exit=0 (Mon Jun 15 04:24:19 PM UTC 2026)
+  exported
+    american     61%
+    australian   70%
+    british      64%
+    chinese      50%
+    filipino     68%
+    indian       58%
+    japanese     33%
+    korean        0%
+    latin        62%
+    spanish      42%
+    ALL          61%  (prod 86, surgical 92)
+    multi-source FP/hr @0.5 (prod 3.6, surgical 6.4):
+      voxpopuli_test     0.5       1 fires =     0.7/hr            0 fires =     0.0/hr
+      peoples_test       0.5       5 fires =    10.0/hr            0 fires =     0.0/hr
+      thirdparty_ami     0.5       9 fires =    18.0/hr            0 fires =     0.0/hr
+      combined           0.5      15 fires =     6.0/hr            0 fires =     0.0/hr
+
+=== REBAL DONE Mon Jun 15 04:30:23 PM UTC 2026 — pick the config that holds ~92% recall with FP nearest prod's 3.6/hr ===

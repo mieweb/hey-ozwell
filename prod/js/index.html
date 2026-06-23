@@ -7,6 +7,21 @@
         <link rel="stylesheet" href="style.css" />
         <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.19.0/dist/ort.min.js"></script>
         <script type="module" src="hey-buddy.js"></script>
+        <!-- Embed the real Ozwell widget (Option B integration) -->
+        <script>
+            window.OzwellChatConfig = {
+                endpoint: "http://localhost:3000/v1/chat/completions",
+                widgetUrl: "http://localhost:3000/embed/ozwell.html",
+                apiKey: "agnt_key-mock-test",
+                title: "Ozwell Chat",
+                defaultUI: true,
+            };
+        </script>
+        <script src="http://localhost:3000/embed/ozwell-loader.js"></script>
+        <!-- Speaker-verification gate (loads the single-threaded WASM from /sv-runtime) -->
+        <script src="speaker-verify.js"></script>
+        <!-- On-device transcription (Transformers.js + Whisper, loads in background) -->
+        <script type="module" src="whisper.js"></script>
         <script src="index.js"></script>
     </head>
     <body>
