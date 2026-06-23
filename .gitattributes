@@ -8,3 +8,5 @@
 
 # Standup short visuals: keep as normal blobs (small, must render on a plain pull, not LFS)
 prod/js/docs/short-mon-*.png !filter !diff !merge -text
+
+prod/js/docs/short-*.png !filter !diff !merge -text
