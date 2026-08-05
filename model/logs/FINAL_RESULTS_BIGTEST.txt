@@ -1,0 +1,18 @@
+=== PROD models on BIG held-out ElevenLabs test (disjoint voices) Fri Jun 12 03:16:53 PM UTC 2026 ===
+test-set sizes:
+  american: hey=64 done=64
+  australian: hey=64 done=64
+  british: hey=64 done=64
+  chinese: hey=20 done=20
+  filipino: hey=40 done=40
+  indian: hey=64 done=64
+  japanese: hey=6 done=6
+  korean: hey=2 done=2
+  latin: hey=40 done=40
+  spanish: hey=26 done=26
+  File "<stdin>", line 13
+    print(f"  {\"ALL\":11s} n={len(p):3d}  @0.5={(p>=0.5).mean()*100:3.0f}%  @0.8={(p>=0.8).mean()*100:3.0f}%  @0.9={(p>=0.9).mean()*100:3.0f}%")
+                                                                                                                                                ^
+SyntaxError: f-string expression part cannot include a backslash
+
+=== BIGTEST DONE Fri Jun 12 03:16:53 PM UTC 2026 ===

@@ -17,3 +17,24 @@ model/data/*.json
 # Loose wavs (use LFS if intentionally committing)
 *.wav
 !model/data/data.zip
+
+# Python caches
+__pycache__/
+*.pyc
+
+# Eval harness scratch (downloaded models + generated figures — regenerate, don't commit)
+model/eval/pretrained/
+model/eval/figures/
+# Large regenerable training artifacts (do not commit)
+model/checkpoints/
+model/heybuddy/precalculated/
+model/heybuddy/pretrained/
+model/logs/*.log
+prod/js/models/*.amanda-bak
+
+# Speaker-verification WASM binaries (large build artifacts — regenerate via the
+# build runbook in prod/js/docs/speaker-verification-spike.md, or scp from the build box)
+prod/js/sv-wasm/*.wasm
+prod/js/sv-wasm/*.data
+prod/js/sv-runtime/*.wasm
+prod/js/sv-runtime/*.data

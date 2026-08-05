@@ -179,7 +179,15 @@ class SpeechEmbeddings:
             audio,
             sample_rate=16000,
         )
-        audio_tensor *= 32767.0 # Return to int16 range values, but as float32
+        # SCALE FIX (MIE 2026-06-03): upstream did `audio_tensor *= 32767.0` (a fixed scale that
+        # assumed [-1,1] input). The real requirement is that positives, negatives, and inference
+        # audio all reach the mel model at a CONSISTENT loudness — otherwise the model separates by
+        # loudness instead of by content. Sources here disagree wildly (Piper positives peak ~1.0,
+        # freesound negatives peak ~0.1, mic/eval clips peak ~0.7). Fix: peak-normalize every clip to
+        # 1.0 so embeddings are loudness-invariant. The eval harness + prod/js do the same.
+        # See model/docs/audio-scale-mismatch.md.
+        _peak = audio_tensor.abs().amax(dim=-1, keepdim=True)
+        audio_tensor = audio_tensor / _peak.clamp(min=1e-5)
         if audio_tensor.shape[1] > 1:
             audio_tensor = audio_tensor.mean(dim=1, keepdim=True)
 

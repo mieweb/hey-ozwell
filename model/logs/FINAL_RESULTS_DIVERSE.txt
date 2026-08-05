@@ -1,0 +1,25 @@
+=== diverse started Fri Jun  5 06:27:35 PM UTC 2026 ===
++15k diverse Piper positives (VCTK 109 UK + 5 US) into 100k libritts; test=held-out ElevenLabs
+[1/4] generate diverse positives (Fri Jun  5 06:27:35 PM UTC 2026) -> logs/diverse_gen.log ...
+  gen exit=0 : saved heybuddy/precalculated/diverse_pos.npy shape=(15000, 16, 96) mean(frames)=2.81
+[2/4] back up clean 100k + inject diverse into positive cache
+positives now (115000, 16, 96) = 100000 libritts + 15000 diverse
+[3/4] retrain with 115000 positives (Fri Jun  5 07:10:03 PM UTC 2026) -> logs/diverse_train.log
+  train exit=0 (Fri Jun  5 09:51:58 PM UTC 2026)
+[4/4] export + eval (Fri Jun  5 09:51:58 PM UTC 2026):
+exported
+--- diverse / ElevenLabs HELD-OUT test ---
+POSITIVE  n= 100  mean=0.847  median=0.997  p10=0.351  p90=1.000
+NEGATIVE  n= 139  mean=0.533  median=0.571  p10=0.012  p90=1.000
+  thr=0.30   recall= 90.0%   per-clip FPR= 59.7%
+  thr=0.50   recall= 87.0%   per-clip FPR= 52.5%
+  thr=0.70   recall= 79.0%   per-clip FPR= 42.4%
+  thr=0.90   recall= 72.0%   per-clip FPR= 36.7%
+--- in-domain Piper ---
+POSITIVE  n=  15  mean=0.838  median=0.924  p10=0.565  p90=0.999
+NEGATIVE  n= 139  mean=0.533  median=0.571  p10=0.012  p90=1.000
+  thr=0.30   recall= 93.3%   per-clip FPR= 59.7%
+  thr=0.50   recall= 93.3%   per-clip FPR= 52.5%
+  thr=0.70   recall= 80.0%   per-clip FPR= 42.4%
+  thr=0.90   recall= 66.7%   per-clip FPR= 36.7%
+=== diverse DONE Fri Jun  5 09:52:25 PM UTC 2026 ===

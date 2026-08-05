@@ -1,0 +1,49 @@
+=== accent-weight SWEEP queued Fri Jun  5 08:18:46 PM UTC 2026 — waiting for track-1 + Google + Azure builds ===
+prerequisites ready Sat Jun  6 03:29:48 AM UTC 2026
+
+>>> CONFIG accent x1  (build positives Sat Jun  6 03:29:48 AM UTC 2026)
+  positives (127384, 16, 96) (accent x1)
+  retrain x1 (127384 positives) Sat Jun  6 03:29:52 AM UTC 2026 -> logs/sweep_x1_train.log
+  train exit=0 Sat Jun  6 05:21:56 AM UTC 2026
+  exported
+  [accent x1] recall by set | neg FPR@0.5=81%
+    ElevenLabs(American)     @0.5= 86.0%  @0.7= 79.0%  (n=100)
+    accent en-AU             @0.5=100.0%  @0.7= 91.7%  (n=12)
+    accent en-GB             @0.5=100.0%  @0.7= 93.8%  (n=16)
+    accent en-IE             @0.5=100.0%  @0.7=100.0%  (n=1)
+    accent en-IN             @0.5=100.0%  @0.7= 91.7%  (n=12)
+    accent en-NG             @0.5=  0.0%  @0.7=  0.0%  (n=1)
+    accent en-US             @0.5= 95.7%  @0.7= 91.3%  (n=23)
+    accent en-ZA             @0.5=100.0%  @0.7=100.0%  (n=1)
+
+>>> CONFIG accent x3  (build positives Sat Jun  6 05:22:12 AM UTC 2026)
+  positives (152152, 16, 96) (accent x3)
+  retrain x3 (152152 positives) Sat Jun  6 05:22:15 AM UTC 2026 -> logs/sweep_x3_train.log
+  train exit=0 Sat Jun  6 07:14:58 AM UTC 2026
+  exported
+  [accent x3] recall by set | neg FPR@0.5=69%
+    ElevenLabs(American)     @0.5= 73.0%  @0.7= 65.0%  (n=100)
+    accent en-AU             @0.5=100.0%  @0.7= 91.7%  (n=12)
+    accent en-GB             @0.5= 93.8%  @0.7= 93.8%  (n=16)
+    accent en-IE             @0.5=100.0%  @0.7=100.0%  (n=1)
+    accent en-IN             @0.5= 66.7%  @0.7= 66.7%  (n=12)
+    accent en-NG             @0.5=  0.0%  @0.7=  0.0%  (n=1)
+    accent en-US             @0.5= 91.3%  @0.7= 87.0%  (n=23)
+    accent en-ZA             @0.5=100.0%  @0.7=100.0%  (n=1)
+
+>>> CONFIG accent x6  (build positives Sat Jun  6 07:15:14 AM UTC 2026)
+  positives (189304, 16, 96) (accent x6)
+  retrain x6 (189304 positives) Sat Jun  6 07:15:18 AM UTC 2026 -> logs/sweep_x6_train.log
+  train exit=0 Sat Jun  6 09:08:51 AM UTC 2026
+  exported
+  [accent x6] recall by set | neg FPR@0.5=78%
+    ElevenLabs(American)     @0.5= 92.0%  @0.7= 87.0%  (n=100)
+    accent en-AU             @0.5=100.0%  @0.7=100.0%  (n=12)
+    accent en-GB             @0.5= 93.8%  @0.7= 93.8%  (n=16)
+    accent en-IE             @0.5=100.0%  @0.7=100.0%  (n=1)
+    accent en-IN             @0.5= 91.7%  @0.7= 83.3%  (n=12)
+    accent en-NG             @0.5=  0.0%  @0.7=  0.0%  (n=1)
+    accent en-US             @0.5=100.0%  @0.7=100.0%  (n=23)
+    accent en-ZA             @0.5=100.0%  @0.7=100.0%  (n=1)
+
+=== SWEEP DONE Sat Jun  6 09:09:07 AM UTC 2026 — compare the 3 configs above (accent x1 / x3 / x6) ===

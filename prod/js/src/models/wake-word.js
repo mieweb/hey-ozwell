@@ -23,6 +23,11 @@ export class WakeWord extends ONNXModel {
     ) {
         super(modelPath, power, webnn, webgpu, webgl, wasm);
         this.threshold = threshold;
+        // Debounce: require this many CONSECUTIVE frames over threshold before firing.
+        // 1 = original (fire on a single frame). Set 2-3 to kill single-frame false-fires
+        // (real spoken phrases sustain 3-6 frames; spurious fires are 1 frame). See hey-buddy options.
+        this.debounceFrames = 1;
+        this.consecutiveCount = 0;
     }
 
     /**
@@ -75,9 +80,17 @@ export class WakeWord extends ONNXModel {
     async checkWakeWordCalled(embeddings) {
         const probability = await this.run(embeddings);
 
+        // Debounce: count consecutive over-threshold frames; only "detected" once we reach
+        // debounceFrames. Single-frame spikes (most conversational/TV false-fires) never reach it;
+        // a real sustained utterance does. `run` is returned for live logging/tuning.
+        const over = probability >= this.threshold;
+        this.consecutiveCount = over ? this.consecutiveCount + 1 : 0;
+        const detected = this.consecutiveCount >= (this.debounceFrames || 1);
+
         return {
             probability,
-            detected: probability >= this.threshold
+            detected,
+            run: this.consecutiveCount
         };
     }
 

@@ -7,6 +7,8 @@ import {
     MelSpectrogram,
     WakeWord
 } from "./models.js";
+import { AcousticVerifier } from "./models/acoustic-verifier.js";
+import { Enrollment } from "./models/enrollment.js";
 
 /**
  * Combines an array of embedding buffers into a single embedding tensor.
@@ -70,6 +72,26 @@ export class HeyBuddy {
         options.negativeVadCount = options.negativeVadCount || 8;
         this.wakeWordThreads = options.wakeWordThreads || 4;
         this.wakeWordThreshold = options.wakeWordThreshold || 0.5;
+        // Per-word thresholds (keyed by model file name, e.g. "hey-ozwell"); falls back to wakeWordThreshold.
+        this.wakeWordThresholds = options.wakeWordThresholds || {};
+        // Debounce: consecutive over-threshold frames required to fire. 1 = original behavior.
+        // Set 2 (or 3) to kill single-frame false-fires (conversational/TV). Per-word overrides via
+        // wakeWordDebounces, e.g. { "hey-ozwell": 2, "ozwell-i'm-done": 2 }.
+        this.wakeWordDebounce = options.wakeWordDebounce || 1;
+        this.wakeWordDebounces = options.wakeWordDebounces || {};
+        // Stage-2 verifier (optional): an object with `async verify(audioFloat32, wakeWordName) -> bool`.
+        // When set, a debounced stage-1 fire is only accepted if the verifier confirms it (e.g. an ASR
+        // re-check of the buffered audio). Rejects "confident on random speech" fires. null = stage-1 only.
+        this.verifier = options.verifier || null;
+        // Shadow mode: when true, the verifier still runs and LOGS what it would suppress, but does NOT
+        // block the fire. Use for a zero-risk live A/B (measure real suppression before gating).
+        this.verifierShadow = options.verifierShadow || false;
+        this.verifierAudioSamples = Math.round((options.verifierAudioSeconds || 2.0) * 16000);
+        this.recentAudio = new Float32Array(0); // rolling raw-audio buffer for the verifier
+        // Enrollment: when set via startEnroll(name, onCapture), track the PEAK (highest stage-1)
+        // embedding per utterance and hand it to onCapture at speech end (one clean template per rep).
+        this.enroll = null;
+        this._lastEnrollCap = 0;
         this.wakeWordInterval = options.wakeWordInterval || 2.0; // How often a wake word can be uttered
 
         // Get options or use defaults for models
@@ -108,13 +130,33 @@ export class HeyBuddy {
         this.embeddingBuffer = null;
         this.embeddingBufferArray = []
 
+        // --- Voiceprint (per-user enrollment) layer ---
+        // Stored voiceprints keyed by wake-word name; each is an array of Float32Array
+        // (each a flattened [16x96] embedding window captured during enrollment). At
+        // runtime we cosine-match the live embedding window against these.
+        this.voiceprints = {};
+        this.voiceprintThreshold = options.voiceprintThreshold ?? 0.85;
+        this.voiceprintThresholds = options.voiceprintThresholds || {};
+        // The voiceprint may only BOOST a phrase the general model already weakly hears, never
+        // fire one it hears nothing of — this stops enrolling a DIFFERENT phrase ("hey doug").
+        this.voiceprintGate = options.voiceprintGate ?? 0.3;
+        this.embeddingMean = null; // running "common-mode" embedding, subtracted before cosine
+        // RECALL use of the voiceprint (amplify a weak model fire). Default on for back-compat;
+        // set false to use the voiceprint for PRECISION only (reject false fires in runWakeGate).
+        this.voiceprintRecall = options.voiceprintRecall ?? true;
+        // The [16x96] embedding window at the moment a wake last fired — so the gate (runWakeGate)
+        // and enrollment can reuse the exact window the model scored, no recompute.
+        this.lastWakeEmbedding = null;
+
         // Initialize wake word models
         this.wakeWords = {};
         this.wakeWordTimes = {};
         this.wakeWordEmbeddingFrames = wakeWordEmbeddingFrames;
         for (let model of modelArray) {
             let modelName = model.split("/").pop().split(".")[0];
-            this.wakeWords[modelName] = new WakeWord(model, this.wakeWordThreshold);
+            let modelThreshold = this.wakeWordThresholds[modelName] ?? this.wakeWordThreshold;
+            this.wakeWords[modelName] = new WakeWord(model, modelThreshold);
+            this.wakeWords[modelName].debounceFrames = this.wakeWordDebounces[modelName] ?? this.wakeWordDebounce;
             this.wakeWords[modelName].test(this.debug);
         }
 
@@ -131,6 +173,7 @@ export class HeyBuddy {
         this.recordingCallbacks = [];
         this.processedCallbacks = [];
         this.detectedCallbacks = [];
+        this.verifierDecisionCallbacks = []; // (name, {accepted, score, stage1}) per stage-2 decision
 
         // Initialize batcher and add callback
         this.batcher = new AudioBatcher(
@@ -139,6 +182,40 @@ export class HeyBuddy {
             targetSampleRate
         );
         this.batcher.onBatch((batch) => this.process(batch));
+    }
+
+    /**
+     * Set a user's enrolled voiceprint for a wake word.
+     * @param {string} name - Wake-word name (e.g. "hey-ozwell").
+     * @param {Float32Array[]} vectors - Flattened embedding windows captured at enrollment.
+     */
+    setVoiceprint(name, vectors) { this.voiceprints[name] = vectors || []; }
+    clearVoiceprint(name) { delete this.voiceprints[name]; }
+    hasVoiceprint(name) {
+        return Array.isArray(this.voiceprints[name]) && this.voiceprints[name].length > 0;
+    }
+
+    /**
+     * Max cosine similarity between a live embedding window and the stored voiceprint set.
+     * Cosine compares DIRECTION not magnitude, so it ignores loudness and keys on what the
+     * sound actually is. Returns 0..1 (1 = near-identical).
+     */
+    voiceprintSimilarity(name, liveVec) {
+        const set = this.voiceprints[name];
+        if (!Array.isArray(set) || set.length === 0 || !liveVec) return 0;
+        const mean = this.embeddingMean; // subtract the common-mode so cosine reflects CONTENT
+        let best = -1; // allow negative (poor-match) scores through, don't floor them at 0
+        for (const ref of set) {
+            let dot = 0, na = 0, nb = 0;
+            const n = Math.min(ref.length, liveVec.length);
+            for (let i = 0; i < n; i++) {
+                const a = mean ? ref[i] - mean[i] : ref[i];
+                const b = mean ? liveVec[i] - mean[i] : liveVec[i];
+                dot += a * b; na += a * a; nb += b * b;
+            }
+            if (na > 0 && nb > 0) { const s = dot / (Math.sqrt(na) * Math.sqrt(nb)); if (s > best) best = s; }
+        }
+        return best;
     }
 
     /**
@@ -164,6 +241,23 @@ export class HeyBuddy {
     onDetected(names, callback) {
         this.detectedCallbacks.push({names, callback});
     }
+
+    /**
+     * Add a callback for each stage-2 verifier decision (confirm/reject), for clean UI display.
+     * @param {Function} callback - called with (name, {accepted, score, stage1}).
+     */
+    onVerifierDecision(callback) {
+        this.verifierDecisionCallbacks.push(callback);
+    }
+
+    /**
+     * Begin enrollment for a phrase: the peak embedding of each spoken rep is handed to onCapture.
+     * @param {string} name - wake word stem (e.g. "hey-ozwell").
+     * @param {Function} onCapture - called (embeddingFloat32, peakScore) once per spoken rep at speech end.
+     */
+    startEnroll(name, onCapture, minScore, onMiss) { this.enroll = { name, onCapture, minScore: minScore ?? null, onMiss }; this._lastEnrollCap = 0; this._enrollCapturedSeg = false; }
+    /** Stop enrollment capture. */
+    stopEnroll() { this.enroll = null; this._enrollCapturedSeg = false; }
 
     /**
      * Add a callback for processed data.
@@ -204,6 +298,7 @@ export class HeyBuddy {
         if (this.debug) {
             console.log("Speech start");
         }
+        if (this.enroll) this._enrollCapturedSeg = false; // reset per utterance (for miss feedback)
         for (let callback of this.speechStartCallbacks) {
             callback();
         }
@@ -216,6 +311,8 @@ export class HeyBuddy {
         if (this.debug) {
             console.log("Speech end");
         }
+        // Enrollment: if the user spoke but nothing qualified this utterance, tell them to try again.
+        if (this.enroll && !this._enrollCapturedSeg && this.enroll.onMiss) this.enroll.onMiss();
         for (let callback of this.speechEndCallbacks) {
             callback();
         }
@@ -258,6 +355,8 @@ export class HeyBuddy {
         }
         this.recording = true;
         this.wakeWordTimes[name] = now;
+        // Stash the fire-time embedding window for the precision gate + enrollment (same window the model scored).
+        this.lastWakeEmbedding = (this.embeddingBuffer && this.embeddingBuffer.data) ? Float32Array.from(this.embeddingBuffer.data) : null;
 
         for (let {names, callback} of this.detectedCallbacks) {
             if (Array.isArray(names) && names.includes(name) || names === name) {
@@ -301,10 +400,72 @@ export class HeyBuddy {
                 returnMap[name] = wordCalled;
             }
         }
+        // Winner-take-all (MIE 2026-06-09): the two phrases share the word "ozwell" and can
+        // co-fire on a single utterance. Since start/stop are mutually exclusive, when more than
+        // one wake word crosses its threshold in the same window, fire ONLY the most CONFIDENT one
+        // (highest raw probability). NOTE: do NOT compare by margin (prob - threshold) — that biases
+        // toward the lower-threshold word (ozwell-done @0.5 out-margins hey-ozwell @0.8 even when you
+        // clearly said "hey ozwell"). Raw probability is the correct comparison here.
+        // Voiceprint layer: cosine-match the live embedding window against each phrase's
+        // enrolled voiceprint. Attach the score (for graphing) and use it as a FALLBACK so a
+        // user the general model is weak on (e.g. their accent) still triggers on a match.
+        const liveVec = this.embeddingBuffer ? this.embeddingBuffer.data : null;
+        for (let name in returnMap) {
+            returnMap[name].voiceprintSim = this.hasVoiceprint(name)
+                ? this.voiceprintSimilarity(name, liveVec) : 0;
+        }
+
+        // Model winner-take-all (highest raw probability among model-detected phrases).
+        let best = null;
         for (let name in returnMap) {
             if (returnMap[name].detected) {
-                this.wakeWordDetected(name);
+                const prob = returnMap[name].probability;
+                if (best === null || prob > best.prob) {
+                    best = { name, prob };
+                }
             }
+        }
+        if (best !== null) {
+            // Stage-2: re-check the buffered audio with the verifier (e.g. ASR). Only fire if confirmed.
+            if (this.verifier) {
+                let confirmed = false;
+                try {
+                    // Pass the embedding window pass-1 just scored (3rd arg) for the ACOUSTIC verifier;
+                    // the ASR verifier ignores it and uses this.recentAudio instead.
+                    confirmed = await this.verifier.verify(this.recentAudio, best.name, this.embeddingBuffer);
+                } catch (e) {
+                    console.error("verifier error (failing open):", e);
+                    confirmed = true; // don't let a verifier crash block detection
+                }
+                // Emit a clean decision event for the UI (one per fire frame; UI collapses per utterance).
+                const score = (this.verifier && typeof this.verifier.lastScore === "number") ? this.verifier.lastScore : null;
+                for (let cb of this.verifierDecisionCallbacks) cb(best.name, {accepted: confirmed, score, stage1: best.prob});
+                if (!confirmed) {
+                    if (this.verifierShadow) {
+                        // shadow: log what we WOULD have killed, but fire anyway (zero recall risk)
+                        console.log(`👻 stage-2 WOULD reject ${best.name} (SHADOW — firing anyway) stage-1 prob ${best.prob.toFixed(2)}`);
+                    } else {
+                        console.log(`🛑 stage-2 REJECTED ${best.name} (stage-1 prob ${best.prob.toFixed(2)})`);
+                        return returnMap;
+                    }
+                } else {
+                    console.log(`✅ stage-2 confirmed ${best.name}`);
+                }
+            }
+            this.wakeWordDetected(best.name);
+        } else if (this.voiceprintRecall) {
+            // RECALL (optional): general model fired nothing -> fall back to the strongest voiceprint
+            // match. Off by default in this build — the voiceprint is used for PRECISION (reject) instead.
+            let vbest = null;
+            for (let name in returnMap) {
+                const sim = returnMap[name].voiceprintSim;
+                const vt = this.voiceprintThresholds[name] ?? this.voiceprintThreshold;
+                // GATE: require the model to at least weakly hear THIS phrase, so the voiceprint
+                // can only amplify the real wake word — not fire a different one ("hey doug").
+                const modelLit = returnMap[name].probability >= this.voiceprintGate;
+                if (sim >= vt && modelLit && (vbest === null || sim > vbest.sim)) vbest = { name, sim };
+            }
+            if (vbest !== null) this.wakeWordDetected(vbest.name);
         }
         return returnMap;
     }
@@ -331,6 +492,17 @@ export class HeyBuddy {
         // Get the last batch of samples
         const lastBatch = audio.subarray(audio.length - this.batcher.batchIntervalSamples);
 
+        // Maintain a rolling raw-audio buffer (~verifierAudioSeconds) for the stage-2 verifier,
+        // by appending each new increment. Only when a verifier is attached (else skip the work).
+        if (this.verifier) {
+            const merged = new Float32Array(this.recentAudio.length + lastBatch.length);
+            merged.set(this.recentAudio, 0);
+            merged.set(lastBatch, this.recentAudio.length);
+            this.recentAudio = merged.length > this.verifierAudioSamples
+                ? merged.slice(merged.length - this.verifierAudioSamples)
+                : merged;
+        }
+
         // Calculate the spectrogram for this buffer, assert it is exactly one window
         const spectrograms = await this.spectrogram.run(audio);
         const embedding = await this.embedding.getEmbeddingFromMelSpectrogramOutput(spectrograms);
@@ -345,7 +517,18 @@ export class HeyBuddy {
         if (this.embeddingBufferArray.length > maxEmbeddings) this.embeddingBufferArray.shift();
 
         this.embeddingBuffer = await embeddingBufferArrayToEmbedding(this.embeddingBufferArray, numFramesPerEmbedding, this.embeddingDim);
+
         const {isSpeaking, speechProbability, justStoppedSpeaking, justStartedSpeaking} = await this.vad.hasSpeechAudio(lastBatch);
+
+        // Running BACKGROUND mean embedding, updated ONLY during non-speech so it stays an
+        // ambient baseline and can't get contaminated by the phrase you're testing. We
+        // subtract it in voiceprintSimilarity so cosine reflects content, not the shared
+        // common-mode that otherwise pins every comparison near 0.9.
+        if (!isSpeaking && this.embeddingBuffer && this.embeddingBuffer.data) {
+            const d = this.embeddingBuffer.data;
+            if (!this.embeddingMean || this.embeddingMean.length !== d.length) this.embeddingMean = Float32Array.from(d);
+            else for (let i = 0; i < d.length; i++) this.embeddingMean[i] += 0.02 * (d[i] - this.embeddingMean[i]);
+        }
 
         if(justStartedSpeaking) this.speechStart();
         if(justStoppedSpeaking) this.speechEnd();
@@ -358,7 +541,10 @@ export class HeyBuddy {
                 listening: true,
                 recording: this.recording,
                 speech: {probability: speechProbability, active: isSpeaking},
-                wakeWords: wakeWordsCalled
+                wakeWords: wakeWordsCalled,
+                // Live [16x96] embedding window (flattened) — what enrollment captures and
+                // what the voiceprint layer matches against. Present only while listening.
+                embedding: this.embeddingBuffer ? this.embeddingBuffer.data : null
             });
         } else {
             // Trigger callbacks right away if we're not listening
@@ -375,7 +561,8 @@ export class HeyBuddy {
                         return carry;
                     },
                     {}
-                )
+                ),
+                embedding: this.embeddingBuffer ? this.embeddingBuffer.data : null
             });
         }
 
@@ -405,4 +592,6 @@ export class HeyBuddy {
 
 if (typeof window !== "undefined") {
     window.HeyBuddy = HeyBuddy;
+    window.AcousticVerifier = AcousticVerifier;  // stage-2 ACOUSTIC verifier (embedding MLP — the one we ship)
+    window.Enrollment = Enrollment;              // per-user on-device enrollment (similarity)
 }

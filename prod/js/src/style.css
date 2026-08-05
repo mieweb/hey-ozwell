@@ -1,9 +1,10 @@
 body {
     display: flex;
     flex-flow: column nowrap;
-    justify-content: center;
+    justify-content: flex-start;
     align-items: center;
-    height: 100vh;
+    min-height: 100vh;
+    overflow-y: auto;
     width: 100vw;
 	padding: 0;
     margin: 0;

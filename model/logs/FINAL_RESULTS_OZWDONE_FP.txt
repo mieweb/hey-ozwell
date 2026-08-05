@@ -1,0 +1,20 @@
+=== ozwell-done FP hardening Wed Jun 10 08:35:03 PM UTC 2026 ===
+>>> BASELINE: current ozwell-done on 'ozwell + wrong ending' clips:
+  fires on ozwell-wrong @0.5: 0% (n=20) [the bug — want LOW after fix]
+negs_fp_done (174000, 17, 96) = negs_C + 8000 confusable + 6000 ozwell-wrong
+>>> TRAIN ozwell_done_fpx: 127384 pos / negs_fp_done (Wed Jun 10 08:35:08 PM UTC 2026)
+  train exit=0 (Wed Jun 10 09:53:03 PM UTC 2026)
+  exported checkpoints/scratch-onnx/ozwell_done_fpx.onnx
+
+>>> AFTER FIX ozwell_done_fpx @0.5 (orig = American 92/IN 83/GB 94/AU 100/US 96, FP 0.6/hr):
+  own recall (must hold):
+    American: 57% (n=100)
+    en-AU: 83% (n=12)
+    en-GB: 56% (n=16)
+    en-IN: 75% (n=12)
+    en-US: 74% (n=23)
+  REJECTION: fires on 'ozwell-wrong' @0.5: 0% (n=20) [want LOW]
+=== ozwell_done_fpx: FP/hour over 1.59h of held-out real speech (410 clips) ===
+  0.5       2 fires =     1.3/hr            0 fires =     0.0/hr
+
+=== OZWDONE_FP DONE Wed Jun 10 09:55:17 PM UTC 2026 — adopt ONLY if recall held AND ozwell-wrong rejection dropped ===

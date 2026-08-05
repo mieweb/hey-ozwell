@@ -1,0 +1,25 @@
+=== hey ozwell accent retrain Mon Jun  8 06:31:17 PM UTC 2026 ===
+[1/6] generate 100k American Piper base (Mon Jun  8 06:31:17 PM UTC 2026)...
+  base gen exit=0 : hey_ozwell.npy = (100000, 16, 96)
+[2/6] diverse Piper positives (Mon Jun  8 08:38:11 PM UTC 2026)...
+  diverse exit=0 : saved heybuddy/precalculated/hey_diverse_pos.npy shape=(15000, 16, 96) mean(frames)=2.35
+[3/6] Google accent positives (Mon Jun  8 09:13:36 PM UTC 2026)...
+  google exit=0 : DONE TRAIN: accent_pos.npy (6422, 16, 96) mean=2.22 | TEST: 30 held-out clips
+[4/6] Azure accent positives (Tue Jun  9 01:04:44 AM UTC 2026)...
+  azure exit=0 : DONE: azure_accent_pos.npy (4480, 16, 96) mean=2.19 | TEST 36 clips
+[5/6] assemble positives (Tue Jun  9 03:38:59 AM UTC 2026)...
+hey_ozwell.npy (125902, 16, 96) = [('hey_ozwell.libritts100k.npy', 100000), ('hey_diverse_pos.npy', 15000), ('hey_accent_pos.npy', 6422), ('hey_azure_accent_pos.npy', 4480)]
+[6/6] train 125902 pos / 160k neg (Tue Jun  9 03:39:03 AM UTC 2026) -> logs/heyozwell_train.log
+  train exit=0 (Tue Jun  9 04:57:37 AM UTC 2026)
+exported
+=== hey ozwell held-out accent recall ===
+  accent en-AU       @0.5=100.0%  @0.7=100.0%  @0.85=100.0%  (n=12)
+  accent en-GB       @0.5=100.0%  @0.7=100.0%  @0.85=100.0%  (n=16)
+  accent en-IN       @0.5=100.0%  @0.7=100.0%  @0.85=100.0%  (n=12)
+  accent en-US       @0.5=100.0%  @0.7= 95.7%  @0.85= 95.7%  (n=23)
+=== heyozwell_C: FP/hour over 1.59h of held-out real speech (410 clips) ===
+  0.5       7 fires =     4.4/hr            0 fires =     0.0/hr
+  0.7       2 fires =     1.3/hr            0 fires =     0.0/hr
+  0.8       0 fires =     0.0/hr            0 fires =     0.0/hr
+  0.9       0 fires =     0.0/hr            0 fires =     0.0/hr
+=== HEY OZWELL DONE Tue Jun  9 04:59:35 AM UTC 2026 — compare accent recall vs baseline (97% Am -> 11% IN) ===

@@ -1,0 +1,18 @@
+=== hey-ozwell retrain: fpx + VoxPopuli negs Thu Jun 11 03:56:07 PM UTC 2026 ===
+VoxPopuli shards found: 6
+negs_fp_vox (263000, 17, 96) = negs_C(160000) + 40000 counterpart + 8000 confusable + 55000 voxpopuli
+>>> TRAIN heyozwell_fpvox: 125902 pos / negs_fp_vox (Thu Jun 11 03:56:13 PM UTC 2026)
+  train exit=0 (Thu Jun 11 05:18:28 PM UTC 2026)
+  exported checkpoints/scratch-onnx/heyozwell_fpvox.onnx
+
+>>> EVAL heyozwell_fpvox @0.8 (compare fpx: recall 100/100/100/100, cross-trigger 2%, FP 0.6/hr):
+  own recall (hey accents):
+    en-AU: 100% (n=12)
+    en-GB: 100% (n=16)
+    en-IN: 100% (n=12)
+    en-US: 100% (n=23)
+  CROSS-TRIGGER on 'ozwell done' @0.8: 6% (n=66) [want ~0]
+=== heyozwell_fpvox: FP/hour over 1.59h of held-out real speech (410 clips) ===
+  0.8       2 fires =     1.3/hr            0 fires =     0.0/hr
+
+=== FPVOX DONE Thu Jun 11 05:20:35 PM UTC 2026 — adopt if FP < 0.6/hr AND recall held AND cross-trigger low ===

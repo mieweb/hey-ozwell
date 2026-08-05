@@ -1,0 +1,17 @@
+=== combined hey-ozwell retrain (cross-talk + FP) Wed Jun 10 02:03:27 PM UTC 2026 ===
+negs_fp_hey (208000, 17, 96) = negs_C +  40000 counterpart + 8000 confusable
+>>> TRAIN heyozwell_fpx: 125902 pos / negs_fp_hey (Wed Jun 10 02:03:32 PM UTC 2026)
+  train exit=0 (Wed Jun 10 03:21:31 PM UTC 2026)
+  exported checkpoints/scratch-onnx/heyozwell_fpx.onnx
+
+>>> EVAL heyozwell_fpx @0.8 (compare: original = recall 100/100/100/96, xtalk = +0 cross-trigger but FP 2.5/hr):
+  own recall (hey accents):
+    en-AU: 100% (n=12)
+    en-GB: 100% (n=16)
+    en-IN: 100% (n=12)
+    en-US: 100% (n=23)
+  CROSS-TRIGGER on 'ozwell done' @0.8: 2% (n=66) [want ~0]
+=== heyozwell_fpx: FP/hour over 1.59h of held-out real speech (410 clips) ===
+  0.8       1 fires =     0.6/hr            0 fires =     0.0/hr
+
+=== FPXTALK DONE Wed Jun 10 03:23:30 PM UTC 2026 — adopt if cross-trigger low AND FP<1 AND recall held ===
